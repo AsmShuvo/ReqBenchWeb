@@ -3,10 +3,12 @@ import { persist } from 'zustand/middleware'
 import { useHistoryStore } from './useHistoryStore'
 import { useEnvironmentStore } from './useEnvironmentStore'
 import { resolveString, buildVariableMap, collectUnresolved } from '../lib/resolveVariables'
-import type { HttpMethod, KeyValuePair, ResponseData } from '../repositories/types'
+import type { HttpMethod, KeyValuePair, ResponseData, ResponseSnapshot } from '../repositories/types'
 
 // Re-export types for backward compatibility with component imports
-export type { HttpMethod, KeyValuePair, ResponseData } from '../repositories/types'
+export type { HttpMethod, KeyValuePair, ResponseData, ResponseSnapshot } from '../repositories/types'
+
+const MAX_RESPONSE_HISTORY = 10
 
 export interface RequestTab {
   id: string
@@ -20,6 +22,7 @@ export interface RequestTab {
   authToken: string
   loading: boolean
   response: ResponseData | null
+  responseHistory: ResponseSnapshot[]
   error: string | null
 }
 
@@ -48,6 +51,7 @@ function createTab(): RequestTab {
     authToken: '',
     loading: false,
     response: null,
+    responseHistory: [],
     error: null,
   }
 }
@@ -239,20 +243,30 @@ export const useRequestStore = create<RequestStore>()(
             return
           }
 
+          const responseData: ResponseData = {
+            status: data.status,
+            statusText: data.statusText,
+            headers: data.headers,
+            body: data.body,
+            responseTime: data.responseTime,
+            size: new Blob([data.body]).size,
+          }
+
+          const snapshot: ResponseSnapshot = {
+            id: crypto.randomUUID(),
+            response: responseData,
+            timestamp: Date.now(),
+            label: `${tab.method} ${data.status} - ${new Date().toLocaleTimeString()}`,
+          }
+
           set((state) => ({
             tabs: state.tabs.map((t) =>
               t.id === id
                 ? {
                     ...t,
                     loading: false,
-                    response: {
-                      status: data.status,
-                      statusText: data.statusText,
-                      headers: data.headers,
-                      body: data.body,
-                      responseTime: data.responseTime,
-                      size: new Blob([data.body]).size,
-                    },
+                    response: responseData,
+                    responseHistory: [snapshot, ...(t.responseHistory ?? [])].slice(0, MAX_RESPONSE_HISTORY),
                   }
                 : t,
             ),
@@ -278,7 +292,12 @@ export const useRequestStore = create<RequestStore>()(
     {
       name: 'reqbench-tabs',
       partialize: (state) => ({
-        tabs: state.tabs.map((t) => ({ ...t, loading: false, error: null })),
+        tabs: state.tabs.map((t) => ({
+          ...t,
+          loading: false,
+          error: null,
+          responseHistory: (t.responseHistory ?? []).slice(0, MAX_RESPONSE_HISTORY),
+        })),
         activeTabId: state.activeTabId,
       }),
     },

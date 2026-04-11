@@ -19,6 +19,13 @@ export interface ResponseData {
   size: number
 }
 
+export interface ResponseSnapshot {
+  id: string
+  response: ResponseData
+  timestamp: number
+  label: string
+}
+
 // ─── History ─────────────────────────────────────────────────────────────────
 
 export interface HistoryEntry {

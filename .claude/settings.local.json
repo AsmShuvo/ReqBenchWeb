@@ -16,7 +16,8 @@
       "Bash(curl -s http://localhost:3001/api/health/db)",
       "Bash(curl -s http://localhost:3001/api/health)",
       "Bash(npx tsx:*)",
-      "Bash(kill %1)"
+      "Bash(kill %1)",
+      "Bash(curl:*)"
     ]
   }
 }

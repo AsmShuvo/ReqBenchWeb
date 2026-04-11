@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useRequestStore } from '../store/useRequestStore'
+import CompareModal from './CompareModal'
 
 type ResponseTab = 'Body' | 'Headers'
 
@@ -25,11 +26,17 @@ function formatBody(body: string): string {
 export default function ResponseViewer() {
   const { tabs, activeTabId } = useRequestStore()
   const [activeTab, setActiveTab] = useState<ResponseTab>('Body')
+  const [compareOpen, setCompareOpen] = useState(false)
 
   const tab = tabs.find((t) => t.id === activeTabId)
   const response = tab?.response
   const error = tab?.error
   const loading = tab?.loading
+
+  // Count total comparison candidates (current tab history + other tabs with responses)
+  const candidateCount =
+    (tab?.responseHistory?.length ?? 0) +
+    tabs.filter((t) => t.id !== activeTabId && t.response).length
 
   const responseTabs: ResponseTab[] = ['Body', 'Headers']
 
@@ -61,6 +68,21 @@ export default function ResponseViewer() {
             <span className="text-sm text-gray-300">{formatSize(response.size)}</span>
           ) : (
             <span className="text-sm text-gray-400">---</span>
+          )}
+        </div>
+
+        {/* Compare button */}
+        <div className="ml-auto">
+          {candidateCount >= 2 && (
+            <button
+              onClick={() => setCompareOpen(true)}
+              className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white cursor-pointer px-2 py-1 rounded border border-gray-700 hover:border-gray-600"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+              Compare
+            </button>
           )}
         </div>
       </div>
@@ -134,6 +156,8 @@ export default function ResponseViewer() {
           </>
         )}
       </div>
+
+      {compareOpen && <CompareModal onClose={() => setCompareOpen(false)} />}
     </div>
   )
 }
