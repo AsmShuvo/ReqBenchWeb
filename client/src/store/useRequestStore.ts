@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { useHistoryStore } from './useHistoryStore'
+import { useEnvironmentStore } from './useEnvironmentStore'
+import { resolveString, buildVariableMap, collectUnresolved } from '../lib/resolveVariables'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
@@ -162,6 +164,42 @@ export const useRequestStore = create<RequestStore>()(
         const tab = get().tabs.find((t) => t.id === id)
         if (!tab || !tab.url.trim()) return
 
+        // Build variable map from active environment
+        const envStore = useEnvironmentStore.getState()
+        const activeEnv = envStore.environments.find(
+          (e) => e.id === envStore.activeEnvironmentId,
+        )
+        const varMap = activeEnv ? buildVariableMap(activeEnv.variables) : new Map<string, string>()
+
+        // Resolve variables in URL
+        const resolvedUrl = resolveString(tab.url, varMap).resolved
+
+        // Collect all texts that might contain variables for unresolved check
+        const allTexts = [
+          tab.url,
+          ...tab.params.filter((p) => p.enabled && p.key).flatMap((p) => [p.key, p.value]),
+          ...tab.headers.filter((p) => p.enabled && p.key).flatMap((p) => [p.key, p.value]),
+          tab.body,
+          tab.authToken,
+        ]
+        const unresolved = collectUnresolved(allTexts, varMap)
+
+        if (unresolved.length > 0) {
+          set((state) => ({
+            tabs: state.tabs.map((t) =>
+              t.id === id
+                ? {
+                    ...t,
+                    loading: false,
+                    response: null,
+                    error: `Unresolved variables: {{${unresolved.join('}}, {{')}}}. Define them in the active environment or remove them.`,
+                  }
+                : t,
+            ),
+          }))
+          return
+        }
+
         set((state) => ({
           tabs: state.tabs.map((t) =>
             t.id === id ? { ...t, loading: true, response: null, error: null } : t,
@@ -169,8 +207,22 @@ export const useRequestStore = create<RequestStore>()(
         }))
 
         try {
-          const fullUrl = buildUrl(tab.url, tab.params)
-          const headers = buildHeaders(tab.headers, tab.authType, tab.authToken)
+          // Resolve variables in all fields
+          const resolvedParams = tab.params.map((p) => ({
+            ...p,
+            key: resolveString(p.key, varMap).resolved,
+            value: resolveString(p.value, varMap).resolved,
+          }))
+          const resolvedHeaders = tab.headers.map((p) => ({
+            ...p,
+            key: resolveString(p.key, varMap).resolved,
+            value: resolveString(p.value, varMap).resolved,
+          }))
+          const resolvedBody = resolveString(tab.body, varMap).resolved
+          const resolvedAuthToken = resolveString(tab.authToken, varMap).resolved
+
+          const fullUrl = buildUrl(resolvedUrl, resolvedParams)
+          const headers = buildHeaders(resolvedHeaders, tab.authType, resolvedAuthToken)
 
           const res = await fetch('/api/requests/execute', {
             method: 'POST',
@@ -179,7 +231,7 @@ export const useRequestStore = create<RequestStore>()(
               method: tab.method,
               url: fullUrl,
               headers,
-              body: tab.method !== 'GET' && tab.method !== 'DELETE' ? tab.body : undefined,
+              body: tab.method !== 'GET' && tab.method !== 'DELETE' ? resolvedBody : undefined,
             }),
           })
 

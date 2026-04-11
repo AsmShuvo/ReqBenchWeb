@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRequestStore, type HttpMethod, type KeyValuePair } from '../store/useRequestStore'
+import { useEnvironmentStore } from '../store/useEnvironmentStore'
+import { resolveString, buildVariableMap, collectUnresolved } from '../lib/resolveVariables'
 import SaveRequestModal from './SaveRequestModal'
 
 const methods: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
@@ -79,9 +81,32 @@ function KeyValueEditor({
 
 export default function RequestBuilder() {
   const { tabs, activeTabId, updateTab, sendRequest } = useRequestStore()
+  const { environments, activeEnvironmentId } = useEnvironmentStore()
   const [activeBuilderTab, setActiveBuilderTab] = useState<BuilderTab>('Params')
   const [saveModalOpen, setSaveModalOpen] = useState(false)
   const tab = tabs.find((t) => t.id === activeTabId)
+
+  const activeEnv = environments.find((e) => e.id === activeEnvironmentId)
+  const varMap = useMemo(
+    () => (activeEnv ? buildVariableMap(activeEnv.variables) : new Map<string, string>()),
+    [activeEnv],
+  )
+
+  const hasVars = tab ? /\{\{\w+\}\}/.test(tab.url) : false
+  const resolvedUrl = tab ? resolveString(tab.url, varMap).resolved : ''
+  const unresolvedVars = useMemo(() => {
+    if (!tab) return []
+    return collectUnresolved(
+      [
+        tab.url,
+        ...tab.params.filter((p) => p.enabled && p.key).flatMap((p) => [p.key, p.value]),
+        ...tab.headers.filter((p) => p.enabled && p.key).flatMap((p) => [p.key, p.value]),
+        tab.body,
+        tab.authToken,
+      ],
+      varMap,
+    )
+  }, [tab, varMap])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -140,6 +165,24 @@ export default function RequestBuilder() {
           )}
         </button>
       </div>
+
+      {/* Resolved URL preview + unresolved warnings */}
+      {hasVars && tab.url.trim() && (
+        <div className="px-3 py-1.5 border-b border-gray-800 space-y-1">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-gray-500 shrink-0">Resolved:</span>
+            <span className="text-gray-400 font-mono truncate">{resolvedUrl}</span>
+          </div>
+          {unresolvedVars.length > 0 && (
+            <div className="flex items-center gap-1.5 text-xs text-yellow-400">
+              <span>&#9888;</span>
+              <span>
+                Unresolved: {unresolvedVars.map((v) => `{{${v}}}`).join(', ')}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Builder Tabs */}
       <div className="flex border-b border-gray-800">
