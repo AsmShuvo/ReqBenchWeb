@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { useHistoryStore } from './useHistoryStore'
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
@@ -190,6 +191,12 @@ export const useRequestStore = create<RequestStore>()(
                 t.id === id ? { ...t, loading: false, error: data.error } : t,
               ),
             }))
+            useHistoryStore.getState().addEntry({
+              method: tab.method,
+              url: fullUrl,
+              status: null,
+              responseTime: null,
+            })
             return
           }
 
@@ -211,6 +218,13 @@ export const useRequestStore = create<RequestStore>()(
                 : t,
             ),
           }))
+
+          useHistoryStore.getState().addEntry({
+            method: tab.method,
+            url: fullUrl,
+            status: data.status,
+            responseTime: data.responseTime,
+          })
         } catch {
           set((state) => ({
             tabs: state.tabs.map((t) =>
