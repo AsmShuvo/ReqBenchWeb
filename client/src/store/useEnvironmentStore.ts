@@ -1,22 +1,15 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { environmentsRepo } from '../repositories'
+import type { Environment, EnvVariable } from '../repositories/types'
 
-export interface EnvVariable {
-  key: string
-  value: string
-  secret: boolean
-  enabled: boolean
-}
-
-export interface Environment {
-  id: string
-  name: string
-  variables: EnvVariable[]
-}
+// Re-export types for backward compatibility with component imports
+export type { Environment, EnvVariable } from '../repositories/types'
 
 interface EnvironmentStore {
   environments: Environment[]
   activeEnvironmentId: string | null
+  _loaded: boolean
+  _load: () => Promise<void>
 
   createEnvironment: (name: string) => void
   renameEnvironment: (id: string, name: string) => void
@@ -25,54 +18,56 @@ interface EnvironmentStore {
   updateVariables: (envId: string, variables: EnvVariable[]) => void
 }
 
-const defaultEnv: Environment = {
-  id: crypto.randomUUID(),
-  name: 'Development',
-  variables: [
-    { key: 'baseUrl', value: 'http://localhost:3001', secret: false, enabled: true },
-  ],
-}
+export const useEnvironmentStore = create<EnvironmentStore>((set, get) => ({
+  environments: [],
+  activeEnvironmentId: null,
+  _loaded: false,
 
-export const useEnvironmentStore = create<EnvironmentStore>()(
-  persist(
-    (set) => ({
-      environments: [defaultEnv],
-      activeEnvironmentId: defaultEnv.id,
+  _load: async () => {
+    if (get()._loaded) return
+    const state = await environmentsRepo.load()
+    set({
+      environments: state.environments,
+      activeEnvironmentId: state.activeEnvironmentId,
+      _loaded: true,
+    })
+  },
 
-      createEnvironment: (name) => {
-        const env: Environment = {
-          id: crypto.randomUUID(),
-          name,
-          variables: [],
-        }
-        set((state) => ({
-          environments: [...state.environments, env],
-        }))
-      },
+  createEnvironment: (name) => {
+    environmentsRepo.createEnvironment(name).then((state) => {
+      set({ environments: state.environments })
+    })
+  },
 
-      renameEnvironment: (id, name) =>
-        set((state) => ({
-          environments: state.environments.map((e) =>
-            e.id === id ? { ...e, name } : e,
-          ),
-        })),
+  renameEnvironment: (id, name) => {
+    set((state) => ({
+      environments: state.environments.map((e) => (e.id === id ? { ...e, name } : e)),
+    }))
+    environmentsRepo.renameEnvironment(id, name)
+  },
 
-      deleteEnvironment: (id) =>
-        set((state) => ({
-          environments: state.environments.filter((e) => e.id !== id),
-          activeEnvironmentId:
-            state.activeEnvironmentId === id ? null : state.activeEnvironmentId,
-        })),
+  deleteEnvironment: (id) => {
+    set((state) => ({
+      environments: state.environments.filter((e) => e.id !== id),
+      activeEnvironmentId: state.activeEnvironmentId === id ? null : state.activeEnvironmentId,
+    }))
+    environmentsRepo.deleteEnvironment(id)
+  },
 
-      setActiveEnvironment: (id) => set({ activeEnvironmentId: id }),
+  setActiveEnvironment: (id) => {
+    set({ activeEnvironmentId: id })
+    environmentsRepo.setActiveEnvironment(id)
+  },
 
-      updateVariables: (envId, variables) =>
-        set((state) => ({
-          environments: state.environments.map((e) =>
-            e.id === envId ? { ...e, variables } : e,
-          ),
-        })),
-    }),
-    { name: 'reqbench-environments' },
-  ),
-)
+  updateVariables: (envId, variables) => {
+    set((state) => ({
+      environments: state.environments.map((e) =>
+        e.id === envId ? { ...e, variables } : e,
+      ),
+    }))
+    environmentsRepo.updateVariables(envId, variables)
+  },
+}))
+
+// Eagerly load on module init
+useEnvironmentStore.getState()._load()

@@ -1,34 +1,18 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import type { HttpMethod, KeyValuePair } from './useRequestStore'
+import { collectionsRepo } from '../repositories'
+import type { Collection, SavedRequest } from '../repositories/types'
 
-export interface SavedRequest {
-  id: string
-  name: string
-  method: HttpMethod
-  url: string
-  params: KeyValuePair[]
-  headers: KeyValuePair[]
-  body: string
-  authType: 'none' | 'bearer' | 'basic'
-  authToken: string
-}
-
-export interface CollectionFolder {
-  id: string
-  name: string
-  requests: SavedRequest[]
-}
-
-export interface Collection {
-  id: string
-  name: string
-  folders: CollectionFolder[]
-  requests: SavedRequest[]
-}
+// Re-export types for backward compatibility with component imports
+export type {
+  Collection,
+  CollectionFolder,
+  SavedRequest,
+} from '../repositories/types'
 
 interface CollectionStore {
   collections: Collection[]
+  _loaded: boolean
+  _load: () => Promise<void>
 
   createCollection: (name: string) => void
   renameCollection: (id: string, name: string) => void
@@ -48,152 +32,130 @@ interface CollectionStore {
   duplicateRequest: (collectionId: string, folderId: string | null, requestId: string) => void
 }
 
-export const useCollectionStore = create<CollectionStore>()(
-  persist(
-    (set, get) => ({
-      collections: [],
+export const useCollectionStore = create<CollectionStore>((set, get) => ({
+  collections: [],
+  _loaded: false,
 
-      createCollection: (name) =>
-        set((state) => ({
-          collections: [
-            ...state.collections,
-            { id: crypto.randomUUID(), name, folders: [], requests: [] },
-          ],
-        })),
+  _load: async () => {
+    if (get()._loaded) return
+    const collections = await collectionsRepo.load()
+    set({ collections, _loaded: true })
+  },
 
-      renameCollection: (id, name) =>
-        set((state) => ({
-          collections: state.collections.map((c) =>
-            c.id === id ? { ...c, name } : c,
-          ),
-        })),
+  createCollection: (name) => {
+    collectionsRepo.createCollection(name).then((col) => {
+      set((state) => ({ collections: [...state.collections, col] }))
+    })
+  },
 
-      deleteCollection: (id) =>
-        set((state) => ({
-          collections: state.collections.filter((c) => c.id !== id),
-        })),
+  renameCollection: (id, name) => {
+    set((state) => ({
+      collections: state.collections.map((c) => (c.id === id ? { ...c, name } : c)),
+    }))
+    collectionsRepo.renameCollection(id, name)
+  },
 
-      duplicateCollection: (id) => {
-        const source = get().collections.find((c) => c.id === id)
-        if (!source) return
-        const deepCopy: Collection = JSON.parse(JSON.stringify(source))
-        deepCopy.id = crypto.randomUUID()
-        deepCopy.name = `${source.name} (copy)`
-        deepCopy.folders.forEach((f) => {
-          f.id = crypto.randomUUID()
-          f.requests.forEach((r) => (r.id = crypto.randomUUID()))
-        })
-        deepCopy.requests.forEach((r) => (r.id = crypto.randomUUID()))
-        set((state) => ({ collections: [...state.collections, deepCopy] }))
-      },
+  deleteCollection: (id) => {
+    set((state) => ({
+      collections: state.collections.filter((c) => c.id !== id),
+    }))
+    collectionsRepo.deleteCollection(id)
+  },
 
-      createFolder: (collectionId, name) =>
-        set((state) => ({
-          collections: state.collections.map((c) =>
-            c.id === collectionId
-              ? {
-                  ...c,
-                  folders: [
-                    ...c.folders,
-                    { id: crypto.randomUUID(), name, requests: [] },
-                  ],
-                }
-              : c,
-          ),
-        })),
+  duplicateCollection: (id) => {
+    collectionsRepo.duplicateCollection(id).then((copy) => {
+      set((state) => ({ collections: [...state.collections, copy] }))
+    })
+  },
 
-      renameFolder: (collectionId, folderId, name) =>
-        set((state) => ({
-          collections: state.collections.map((c) =>
-            c.id === collectionId
-              ? {
-                  ...c,
-                  folders: c.folders.map((f) =>
-                    f.id === folderId ? { ...f, name } : f,
-                  ),
-                }
-              : c,
-          ),
-        })),
+  createFolder: (collectionId, name) => {
+    collectionsRepo.createFolder(collectionId, name).then((updated) => {
+      set((state) => ({
+        collections: state.collections.map((c) => (c.id === collectionId ? updated : c)),
+      }))
+    })
+  },
 
-      deleteFolder: (collectionId, folderId) =>
-        set((state) => ({
-          collections: state.collections.map((c) =>
-            c.id === collectionId
-              ? { ...c, folders: c.folders.filter((f) => f.id !== folderId) }
-              : c,
-          ),
-        })),
+  renameFolder: (collectionId, folderId, name) => {
+    set((state) => ({
+      collections: state.collections.map((c) =>
+        c.id === collectionId
+          ? { ...c, folders: c.folders.map((f) => (f.id === folderId ? { ...f, name } : f)) }
+          : c,
+      ),
+    }))
+    collectionsRepo.renameFolder(collectionId, folderId, name)
+  },
 
-      saveRequest: (collectionId, folderId, request) => {
-        const saved: SavedRequest = { ...request, id: crypto.randomUUID() }
-        set((state) => ({
-          collections: state.collections.map((c) => {
-            if (c.id !== collectionId) return c
-            if (folderId) {
-              return {
-                ...c,
-                folders: c.folders.map((f) =>
-                  f.id === folderId
-                    ? { ...f, requests: [...f.requests, saved] }
-                    : f,
-                ),
-              }
+  deleteFolder: (collectionId, folderId) => {
+    set((state) => ({
+      collections: state.collections.map((c) =>
+        c.id === collectionId
+          ? { ...c, folders: c.folders.filter((f) => f.id !== folderId) }
+          : c,
+      ),
+    }))
+    collectionsRepo.deleteFolder(collectionId, folderId)
+  },
+
+  saveRequest: (collectionId, folderId, request) => {
+    collectionsRepo.saveRequest(collectionId, folderId, request).then((saved) => {
+      set((state) => ({
+        collections: state.collections.map((c) => {
+          if (c.id !== collectionId) return c
+          if (folderId) {
+            return {
+              ...c,
+              folders: c.folders.map((f) =>
+                f.id === folderId ? { ...f, requests: [...f.requests, saved] } : f,
+              ),
             }
-            return { ...c, requests: [...c.requests, saved] }
-          }),
-        }))
-      },
+          }
+          return { ...c, requests: [...c.requests, saved] }
+        }),
+      }))
+    })
+  },
 
-      deleteRequest: (collectionId, folderId, requestId) =>
-        set((state) => ({
-          collections: state.collections.map((c) => {
-            if (c.id !== collectionId) return c
-            if (folderId) {
-              return {
-                ...c,
-                folders: c.folders.map((f) =>
-                  f.id === folderId
-                    ? { ...f, requests: f.requests.filter((r) => r.id !== requestId) }
-                    : f,
-                ),
-              }
-            }
-            return { ...c, requests: c.requests.filter((r) => r.id !== requestId) }
-          }),
-        })),
-
-      duplicateRequest: (collectionId, folderId, requestId) => {
-        const col = get().collections.find((c) => c.id === collectionId)
-        if (!col) return
-        const list = folderId
-          ? col.folders.find((f) => f.id === folderId)?.requests
-          : col.requests
-        const source = list?.find((r) => r.id === requestId)
-        if (!source) return
-        const copy: SavedRequest = {
-          ...JSON.parse(JSON.stringify(source)),
-          id: crypto.randomUUID(),
-          name: `${source.name} (copy)`,
+  deleteRequest: (collectionId, folderId, requestId) => {
+    set((state) => ({
+      collections: state.collections.map((c) => {
+        if (c.id !== collectionId) return c
+        if (folderId) {
+          return {
+            ...c,
+            folders: c.folders.map((f) =>
+              f.id === folderId
+                ? { ...f, requests: f.requests.filter((r) => r.id !== requestId) }
+                : f,
+            ),
+          }
         }
-        set((state) => ({
-          collections: state.collections.map((c) => {
-            if (c.id !== collectionId) return c
-            if (folderId) {
-              return {
-                ...c,
-                folders: c.folders.map((f) =>
-                  f.id === folderId
-                    ? { ...f, requests: [...f.requests, copy] }
-                    : f,
-                ),
-              }
+        return { ...c, requests: c.requests.filter((r) => r.id !== requestId) }
+      }),
+    }))
+    collectionsRepo.deleteRequest(collectionId, folderId, requestId)
+  },
+
+  duplicateRequest: (collectionId, folderId, requestId) => {
+    collectionsRepo.duplicateRequest(collectionId, folderId, requestId).then((copy) => {
+      set((state) => ({
+        collections: state.collections.map((c) => {
+          if (c.id !== collectionId) return c
+          if (folderId) {
+            return {
+              ...c,
+              folders: c.folders.map((f) =>
+                f.id === folderId ? { ...f, requests: [...f.requests, copy] } : f,
+              ),
             }
-            return { ...c, requests: [...c.requests, copy] }
-          }),
-        }))
-      },
-    }),
-    { name: 'reqbench-collections' },
-  ),
-)
+          }
+          return { ...c, requests: [...c.requests, copy] }
+        }),
+      }))
+    })
+  },
+}))
+
+// Eagerly load on module init
+useCollectionStore.getState()._load()

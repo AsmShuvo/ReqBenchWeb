@@ -3,23 +3,10 @@ import { persist } from 'zustand/middleware'
 import { useHistoryStore } from './useHistoryStore'
 import { useEnvironmentStore } from './useEnvironmentStore'
 import { resolveString, buildVariableMap, collectUnresolved } from '../lib/resolveVariables'
+import type { HttpMethod, KeyValuePair, ResponseData } from '../repositories/types'
 
-export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
-
-export interface KeyValuePair {
-  key: string
-  value: string
-  enabled: boolean
-}
-
-export interface ResponseData {
-  status: number
-  statusText: string
-  headers: Record<string, string>
-  body: string
-  responseTime: number
-  size: number
-}
+// Re-export types for backward compatibility with component imports
+export type { HttpMethod, KeyValuePair, ResponseData } from '../repositories/types'
 
 export interface RequestTab {
   id: string

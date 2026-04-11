@@ -1,4 +1,4 @@
-import type { EnvVariable } from '../store/useEnvironmentStore'
+import type { EnvVariable } from '../repositories/types'
 
 const VAR_PATTERN = /\{\{(\w+)\}\}/g
 

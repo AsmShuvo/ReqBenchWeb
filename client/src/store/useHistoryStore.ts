@@ -1,45 +1,48 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
-import type { HttpMethod } from './useRequestStore'
+import { historyRepo } from '../repositories'
+import type { HistoryEntry } from '../repositories/types'
 
-export interface HistoryEntry {
-  id: string
-  method: HttpMethod
-  url: string
-  status: number | null
-  responseTime: number | null
-  timestamp: number
-}
-
-const MAX_ENTRIES = 50
+// Re-export types for backward compatibility with component imports
+export type { HistoryEntry } from '../repositories/types'
+export type { HttpMethod } from '../repositories/types'
 
 interface HistoryStore {
   entries: HistoryEntry[]
+  _loaded: boolean
+  _load: () => Promise<void>
   addEntry: (entry: Omit<HistoryEntry, 'id' | 'timestamp'>) => void
   removeEntry: (id: string) => void
   clearAll: () => void
 }
 
-export const useHistoryStore = create<HistoryStore>()(
-  persist(
-    (set) => ({
-      entries: [],
+export const useHistoryStore = create<HistoryStore>((set, get) => ({
+  entries: [],
+  _loaded: false,
 
-      addEntry: (entry) =>
-        set((state) => ({
-          entries: [
-            { ...entry, id: crypto.randomUUID(), timestamp: Date.now() },
-            ...state.entries,
-          ].slice(0, MAX_ENTRIES),
-        })),
+  _load: async () => {
+    if (get()._loaded) return
+    const entries = await historyRepo.load()
+    set({ entries, _loaded: true })
+  },
 
-      removeEntry: (id) =>
-        set((state) => ({
-          entries: state.entries.filter((e) => e.id !== id),
-        })),
+  addEntry: (entry) => {
+    historyRepo.add(entry).then((newEntry) => {
+      set((state) => ({
+        entries: [newEntry, ...state.entries].slice(0, 50),
+      }))
+    })
+  },
 
-      clearAll: () => set({ entries: [] }),
-    }),
-    { name: 'reqbench-history' },
-  ),
-)
+  removeEntry: (id) => {
+    set((state) => ({ entries: state.entries.filter((e) => e.id !== id) }))
+    historyRepo.remove(id)
+  },
+
+  clearAll: () => {
+    set({ entries: [] })
+    historyRepo.clearAll()
+  },
+}))
+
+// Eagerly load on module init
+useHistoryStore.getState()._load()
