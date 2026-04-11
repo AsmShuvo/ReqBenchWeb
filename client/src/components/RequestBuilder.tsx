@@ -3,6 +3,7 @@ import { useRequestStore, type HttpMethod, type KeyValuePair } from '../store/us
 import { useEnvironmentStore } from '../store/useEnvironmentStore'
 import { resolveString, buildVariableMap, collectUnresolved } from '../lib/resolveVariables'
 import SaveRequestModal from './SaveRequestModal'
+import CodeGenModal from './CodeGenModal'
 
 const methods: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 
@@ -84,6 +85,7 @@ export default function RequestBuilder() {
   const { environments, activeEnvironmentId } = useEnvironmentStore()
   const [activeBuilderTab, setActiveBuilderTab] = useState<BuilderTab>('Params')
   const [saveModalOpen, setSaveModalOpen] = useState(false)
+  const [codeGenOpen, setCodeGenOpen] = useState(false)
   const tab = tabs.find((t) => t.id === activeTabId)
 
   const activeEnv = environments.find((e) => e.id === activeEnvironmentId)
@@ -147,6 +149,13 @@ export default function RequestBuilder() {
           onChange={(e) => updateTab(tab.id, { url: e.target.value })}
           className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 outline-none focus:border-blue-500"
         />
+        <button
+          onClick={() => setCodeGenOpen(true)}
+          className="text-gray-400 hover:text-white hover:bg-gray-800 text-sm px-3 py-1.5 rounded cursor-pointer border border-gray-700"
+          title="Generate Code"
+        >
+          &lt;/&gt;
+        </button>
         <button
           onClick={() => setSaveModalOpen(true)}
           className="text-gray-400 hover:text-white hover:bg-gray-800 text-sm px-3 py-1.5 rounded cursor-pointer border border-gray-700"
@@ -252,6 +261,7 @@ export default function RequestBuilder() {
         )}
       </div>
       {saveModalOpen && <SaveRequestModal onClose={() => setSaveModalOpen(false)} />}
+      {codeGenOpen && <CodeGenModal onClose={() => setCodeGenOpen(false)} />}
     </div>
   )
 }
