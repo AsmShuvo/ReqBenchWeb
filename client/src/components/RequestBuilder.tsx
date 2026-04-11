@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRequestStore, type HttpMethod, type KeyValuePair } from '../store/useRequestStore'
 
 const methods: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
@@ -77,9 +77,22 @@ function KeyValueEditor({
 }
 
 export default function RequestBuilder() {
-  const { tabs, activeTabId, updateTab } = useRequestStore()
+  const { tabs, activeTabId, updateTab, sendRequest } = useRequestStore()
   const [activeBuilderTab, setActiveBuilderTab] = useState<BuilderTab>('Params')
   const tab = tabs.find((t) => t.id === activeTabId)
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault()
+        if (tab && !tab.loading) {
+          sendRequest(tab.id)
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [tab, sendRequest])
 
   if (!tab) return null
 
@@ -107,8 +120,16 @@ export default function RequestBuilder() {
           onChange={(e) => updateTab(tab.id, { url: e.target.value })}
           className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 outline-none focus:border-blue-500"
         />
-        <button className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-1.5 rounded cursor-pointer">
-          Send
+        <button
+          onClick={() => sendRequest(tab.id)}
+          disabled={tab.loading}
+          className="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-1.5 rounded cursor-pointer min-w-16"
+        >
+          {tab.loading ? (
+            <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+          ) : (
+            'Send'
+          )}
         </button>
       </div>
 
