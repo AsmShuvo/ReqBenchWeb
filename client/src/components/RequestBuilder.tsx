@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useRequestStore, type HttpMethod, type KeyValuePair } from '../store/useRequestStore'
+import SaveRequestModal from './SaveRequestModal'
 
 const methods: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 
@@ -79,6 +80,7 @@ function KeyValueEditor({
 export default function RequestBuilder() {
   const { tabs, activeTabId, updateTab, sendRequest } = useRequestStore()
   const [activeBuilderTab, setActiveBuilderTab] = useState<BuilderTab>('Params')
+  const [saveModalOpen, setSaveModalOpen] = useState(false)
   const tab = tabs.find((t) => t.id === activeTabId)
 
   useEffect(() => {
@@ -120,6 +122,12 @@ export default function RequestBuilder() {
           onChange={(e) => updateTab(tab.id, { url: e.target.value })}
           className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 outline-none focus:border-blue-500"
         />
+        <button
+          onClick={() => setSaveModalOpen(true)}
+          className="text-gray-400 hover:text-white hover:bg-gray-800 text-sm px-3 py-1.5 rounded cursor-pointer border border-gray-700"
+        >
+          Save
+        </button>
         <button
           onClick={() => sendRequest(tab.id)}
           disabled={tab.loading}
@@ -200,6 +208,7 @@ export default function RequestBuilder() {
           </div>
         )}
       </div>
+      {saveModalOpen && <SaveRequestModal onClose={() => setSaveModalOpen(false)} />}
     </div>
   )
 }
