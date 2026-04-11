@@ -1,5 +1,7 @@
+import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import { prisma } from './lib/prisma'
 
 const app = express()
 const PORT = 3001
@@ -9,6 +11,16 @@ app.use(express.json())
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' })
+})
+
+app.get('/api/health/db', async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`
+    res.json({ status: 'ok', database: 'connected' })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    res.status(503).json({ status: 'error', database: 'disconnected', error: message })
+  }
 })
 
 app.post('/api/requests/execute', async (req, res) => {

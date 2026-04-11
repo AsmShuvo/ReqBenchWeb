@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── User ────────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  histories    RequestHistory[]
+  collections  Collection[]
+  environments Environment[]
+  benchmarks   BenchmarkRun[]
+}
+
+// ─── Request History ─────────────────────────────────────────────────────────
+
+model RequestHistory {
+  id           String   @id @default(uuid())
+  userId       String?
+  method       String
+  url          String
+  status       Int?
+  responseTime Int?
+  requestData  Json?
+  responseData Json?
+  createdAt    DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// ─── Collections ─────────────────────────────────────────────────────────────
+
+model Collection {
+  id        String   @id @default(uuid())
+  userId    String?
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User?              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  folders  CollectionFolder[]
+  requests SavedRequest[]
+
+  @@index([userId])
+}
+
+model CollectionFolder {
+  id           String   @id @default(uuid())
+  collectionId String
+  name         String
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  collection Collection     @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  requests   SavedRequest[]
+
+  @@index([collectionId])
+}
+
+model SavedRequest {
+  id           String   @id @default(uuid())
+  collectionId String
+  folderId     String?
+  name         String
+  method       String
+  url          String
+  params       Json     @default("[]")
+  headers      Json     @default("[]")
+  body         String   @default("")
+  authType     String   @default("none")
+  authToken    String   @default("")
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  collection Collection       @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  folder     CollectionFolder? @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  @@index([collectionId])
+  @@index([folderId])
+}
+
+// ─── Environments ────────────────────────────────────────────────────────────
+
+model Environment {
+  id        String   @id @default(uuid())
+  userId    String?
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user      User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  variables EnvironmentVariable[]
+
+  @@index([userId])
+}
+
+model EnvironmentVariable {
+  id            String  @id @default(uuid())
+  environmentId String
+  key           String
+  value         String
+  secret        Boolean @default(false)
+  enabled       Boolean @default(true)
+
+  environment Environment @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+
+  @@unique([environmentId, key])
+  @@index([environmentId])
+}
+
+// ─── Benchmark ───────────────────────────────────────────────────────────────
+
+model BenchmarkRun {
+  id            String   @id @default(uuid())
+  userId        String?
+  name          String
+  method        String
+  url           String
+  totalRequests Int
+  concurrency   Int
+  results       Json     @default("{}")
+  createdAt     DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}

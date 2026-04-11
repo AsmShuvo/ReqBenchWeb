@@ -1,0 +1,829 @@
+================================================================================
+                        REQBENCH - PROJECT DOCUMENTATION
+                     HTTP Request Benchmarking & Testing Tool
+================================================================================
+
+Generated: 2026-04-11
+Status:    In active development (local-only, no database connected yet)
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+  1.  Project Overview
+  2.  Tech Stack
+  3.  Folder Structure
+  4.  How to Run
+  5.  Architecture Overview
+  6.  Backend (server/)
+      6.1  Express Server Setup
+      6.2  API Endpoints
+      6.3  Request Proxy Flow
+      6.4  Error Handling
+  7.  Frontend (client/)
+      7.1  App Layout
+      7.2  State Management (Zustand Stores)
+      7.3  Components
+      7.4  Utility Libraries
+  8.  Feature: Request Builder & Execution
+      8.1  Building a Request
+      8.2  Sending a Request
+      8.3  Viewing the Response
+      8.4  Keyboard Shortcuts
+  9.  Feature: Request Tabs
+      9.1  Tab Operations
+      9.2  Tab Persistence
+      9.3  Tab Name Derivation
+ 10.  Feature: Request History
+      10.1  How History is Recorded
+      10.2  History Panel
+      10.3  Storage Limits
+ 11.  Feature: Collections
+      11.1  Data Structure
+      11.2  Collection Operations
+      11.3  Folder Operations
+      11.4  Saved Request Operations
+      11.5  Save Modal
+ 12.  Feature: Environment Variables
+      12.1  Environment Structure
+      12.2  Variable Syntax
+      12.3  Resolution Flow
+      12.4  Unresolved Variable Handling
+      12.5  Secret Variables
+      12.6  Environment Manager
+ 13.  localStorage Keys
+ 14.  Backend .env Configuration
+ 15.  What Has NOT Been Implemented Yet
+ 16.  Testing Guide
+
+================================================================================
+1. PROJECT OVERVIEW
+================================================================================
+
+ReqBench is a Postman-like HTTP request testing tool built as a full-stack web
+application. It allows users to:
+
+  - Build and send HTTP requests (GET, POST, PUT, PATCH, DELETE)
+  - View responses with status, timing, headers, and formatted body
+  - Manage multiple request tabs with full state persistence
+  - Organize requests into collections with folders
+  - Track request history (last 50 requests)
+  - Use environment variables ({{variableName}}) across requests
+  - Switch between environments (Development, Production, etc.)
+
+All data is stored locally in the browser's localStorage. No database is
+connected yet. The backend serves only as a proxy to execute HTTP requests
+(avoiding CORS restrictions).
+
+================================================================================
+2. TECH STACK
+================================================================================
+
+Frontend:
+  - React 19           (UI framework)
+  - Vite 8             (build tool + dev server)
+  - TypeScript 6       (type safety)
+  - Tailwind CSS 4     (utility-first styling, via @tailwindcss/vite plugin)
+  - Zustand 5          (state management with persist middleware)
+
+Backend:
+  - Express 5          (HTTP server)
+  - TypeScript 6       (type safety)
+  - tsx                 (TypeScript execution + watch mode)
+  - cors               (cross-origin support)
+  - Node.js fetch      (built-in, for proxying HTTP requests)
+
+All tools are free and open source. No paid services are used.
+
+================================================================================
+3. FOLDER STRUCTURE
+================================================================================
+
+ReqBenchWeb/
+|
+|-- client/                            # Frontend (React + Vite + Tailwind)
+|   |-- .env                           # VITE_SERVER_URL=http://localhost:3001
+|   |-- index.html                     # HTML entry point
+|   |-- vite.config.ts                 # Vite config: React, Tailwind, API proxy
+|   |-- tsconfig.json                  # TypeScript config
+|   |-- package.json                   # Dependencies + scripts
+|   |-- public/                        # Static assets
+|   |-- src/
+|       |-- main.tsx                   # React entry point (renders <App />)
+|       |-- index.css                  # Tailwind import (@import "tailwindcss")
+|       |-- App.tsx                    # Root layout: Navbar, TabBar, panels
+|       |
+|       |-- components/
+|       |   |-- Navbar.tsx             # Top bar: logo, collections, env selector, history
+|       |   |-- TabBar.tsx             # Request tab bar: switch, add, close, duplicate
+|       |   |-- RequestBuilder.tsx     # Left panel: method, URL, params, headers, body, auth
+|       |   |-- ResponseViewer.tsx     # Right panel: status, time, size, body, headers
+|       |   |-- HistoryPanel.tsx       # Slide-over: request history with search
+|       |   |-- CollectionsPanel.tsx   # Slide-over: collections tree view
+|       |   |-- SaveRequestModal.tsx   # Modal: save current request to collection
+|       |   |-- EnvironmentManager.tsx # Modal: manage environments + variables
+|       |
+|       |-- store/
+|       |   |-- useRequestStore.ts     # Tabs, active tab, send request logic
+|       |   |-- useHistoryStore.ts     # Request history (last 50)
+|       |   |-- useCollectionStore.ts  # Collections with folders and saved requests
+|       |   |-- useEnvironmentStore.ts # Environments with key/value variables
+|       |
+|       |-- lib/
+|           |-- resolveVariables.ts    # {{var}} resolution utility
+|
+|-- server/                            # Backend (Express + TypeScript)
+|   |-- .env                           # DB_URL, GROQ_API (not used yet)
+|   |-- tsconfig.json                  # TypeScript config
+|   |-- package.json                   # Dependencies + scripts
+|   |-- src/
+|       |-- index.ts                   # Express server: health check + request proxy
+|
+|-- documentation.txt                  # This file
+
+================================================================================
+4. HOW TO RUN
+================================================================================
+
+Prerequisites:
+  - Node.js (v18+ for built-in fetch support)
+  - npm
+
+Start the backend:
+
+    cd server
+    npm install          (first time only)
+    npm run dev          (starts on http://localhost:3001)
+
+Start the frontend:
+
+    cd client
+    npm install          (first time only)
+    npm run dev          (starts on http://localhost:5173)
+
+Open http://localhost:5173 in your browser.
+
+The frontend dev server proxies /api/* requests to the backend (configured in
+vite.config.ts using the VITE_SERVER_URL from client/.env).
+
+================================================================================
+5. ARCHITECTURE OVERVIEW
+================================================================================
+
+    Browser (localhost:5173)
+        |
+        |  User builds request in UI
+        |  (method, URL with {{vars}}, headers, body, auth)
+        |
+        v
+    React Frontend (Zustand stores)
+        |
+        |  1. Resolves {{variables}} from active environment
+        |  2. Checks for unresolved variables (blocks if any)
+        |  3. Sends POST /api/requests/execute to backend
+        |
+        v
+    Vite Dev Proxy (/api/* -> localhost:3001)
+        |
+        v
+    Express Backend (localhost:3001)
+        |
+        |  POST /api/requests/execute
+        |  1. Validates URL
+        |  2. Calls fetch() to external API (server-side, no CORS issues)
+        |  3. Measures response time
+        |  4. Returns { status, statusText, headers, body, responseTime }
+        |
+        v
+    External API (e.g., jsonplaceholder.typicode.com)
+
+Why a backend proxy?
+  Browsers block cross-origin requests (CORS). The Express server makes the
+  actual HTTP call server-side, so any URL works without CORS issues.
+
+State persistence:
+  All client state (tabs, history, collections, environments) is persisted
+  in localStorage using Zustand's persist middleware. No server-side storage
+  is used yet.
+
+================================================================================
+6. BACKEND (server/)
+================================================================================
+
+6.1 EXPRESS SERVER SETUP
+------------------------
+
+File: server/src/index.ts
+
+  - Express 5 with CORS enabled and JSON body parsing
+  - Runs on port 3001
+  - Dev script: "tsx watch src/index.ts" (auto-restarts on file changes)
+
+6.2 API ENDPOINTS
+-----------------
+
+GET /api/health
+  Response: { "status": "ok" }
+  Purpose:  Health check to verify backend is running
+
+POST /api/requests/execute
+  Request body:
+    {
+      "method": "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
+      "url": "https://example.com/api/resource",
+      "headers": { "Content-Type": "application/json", ... },
+      "body": "..." (optional, ignored for GET/HEAD)
+    }
+
+  Success response:
+    {
+      "status": 200,
+      "statusText": "OK",
+      "headers": { "content-type": "application/json", ... },
+      "body": "...",
+      "responseTime": 142
+    }
+
+  Error responses:
+    400: { "error": "method and url are required" }
+    400: { "error": "Invalid URL" }
+    408: { "error": "Request timed out (30s)" }
+    502: { "error": "Network error: <message>" }
+
+6.3 REQUEST PROXY FLOW
+-----------------------
+
+  1. Validate that method and url are present (400 if missing)
+  2. Validate URL format with new URL() (400 if invalid)
+  3. Create AbortController with 30-second timeout
+  4. Record start time with performance.now()
+  5. Execute fetch() with method, headers, body, and abort signal
+  6. Record response time
+  7. Extract response headers into a plain object
+  8. Read response body as text
+  9. Return JSON with status, statusText, headers, body, responseTime
+
+6.4 ERROR HANDLING
+------------------
+
+  - Invalid URL:        Caught by new URL() constructor, returns 400
+  - Network error:      Caught in try/catch, returns 502 with error message
+  - Timeout (>30s):     AbortController fires, caught as AbortError, returns 408
+  - Backend unreachable: Frontend catches fetch failure: "Failed to reach backend server"
+
+================================================================================
+7. FRONTEND (client/)
+================================================================================
+
+7.1 APP LAYOUT
+--------------
+
+File: client/src/App.tsx
+
+The app has a fixed layout:
+
+    +--------------------------------------------------+
+    |  Navbar (ReqBench | Collections | Env | History)  |
+    +--------------------------------------------------+
+    |  TabBar (GET New Request | POST /users | + )      |
+    +--------------------------------------------------+
+    |  Left Panel          |  Right Panel               |
+    |  (RequestBuilder)    |  (ResponseViewer)           |
+    |                      |                             |
+    |  [GET v] [URL...   ] |  Status: 200 OK             |
+    |  [Save] [Send]       |  Time: 142ms   Size: 1.2KB  |
+    |                      |                             |
+    |  Params | Headers    |  Body | Headers              |
+    |  Body   | Auth       |                             |
+    |                      |  { "id": 1, "title": ... }  |
+    |                      |                             |
+    +--------------------------------------------------+
+
+Three overlay panels can be toggled:
+  - CollectionsPanel (slides from left)
+  - HistoryPanel (slides from right)
+  - EnvironmentManager (centered modal)
+
+7.2 STATE MANAGEMENT (ZUSTAND STORES)
+--------------------------------------
+
+All stores use Zustand with the persist middleware for localStorage.
+
+Store: useRequestStore (key: "reqbench-tabs")
+  State:   tabs[], activeTabId
+  Actions: addTab, removeTab, setActiveTab, updateTab, duplicateTab, sendRequest
+  Notes:   loading and error are stripped from persistence (transient state)
+
+Store: useHistoryStore (key: "reqbench-history")
+  State:   entries[] (max 50, newest first)
+  Actions: addEntry, removeEntry, clearAll
+
+Store: useCollectionStore (key: "reqbench-collections")
+  State:   collections[] (each with folders[] and requests[])
+  Actions: createCollection, renameCollection, deleteCollection, duplicateCollection,
+           createFolder, renameFolder, deleteFolder,
+           saveRequest, deleteRequest, duplicateRequest
+
+Store: useEnvironmentStore (key: "reqbench-environments")
+  State:   environments[], activeEnvironmentId
+  Actions: createEnvironment, renameEnvironment, deleteEnvironment,
+           setActiveEnvironment, updateVariables
+  Default: "Development" environment with baseUrl=http://localhost:3001
+
+7.3 COMPONENTS
+--------------
+
+Navbar.tsx
+  - Left: ReqBench logo + Collections button (with count badge)
+  - Right: Environment dropdown selector + gear icon + History button (with count badge)
+  - Environment dropdown shows green dot when active, switches environment instantly
+
+TabBar.tsx
+  - Horizontal scrollable tab bar
+  - Each tab shows: color-coded method badge + tab name
+  - Hover reveals: duplicate button + close button (close hidden when only 1 tab)
+  - "+" button adds new tab
+
+RequestBuilder.tsx
+  - URL bar: method dropdown (color-coded), URL input, Save button, Send button
+  - Resolved URL preview (shown when URL contains {{variables}})
+  - Unresolved variable warning (yellow, shown when vars can't be resolved)
+  - Sub-tabs: Params, Headers, Body, Auth
+  - Params/Headers: KeyValueEditor with checkbox, key, value, delete, add
+  - Body: monospace textarea
+  - Auth: dropdown (none/bearer/basic) + token input
+
+ResponseViewer.tsx
+  - Summary bar: status (color-coded), time (ms), size (B/KB)
+  - Sub-tabs: Body, Headers
+  - Body: pretty-printed JSON (falls back to raw text)
+  - Headers: key-value list
+  - States: loading spinner, error banner, empty placeholder
+
+HistoryPanel.tsx
+  - Slide-over from right
+  - Search input (filters by URL, method, or status)
+  - Entry list: method badge, truncated URL, status, time, relative timestamp
+  - Click entry to reopen in new tab
+  - Hover to reveal delete button
+  - Clear all button + entry count footer
+
+CollectionsPanel.tsx
+  - Slide-over from left
+  - Tree view: Collection > Folders > Requests
+  - Expand/collapse collections and folders
+  - Hover actions: rename, duplicate, delete, add folder
+  - Click a saved request to load into new tab
+  - Empty states for no collections, empty collections, empty folders
+
+SaveRequestModal.tsx
+  - Centered modal triggered by Save button in RequestBuilder
+  - Fields: request name, collection picker (or create new), folder picker
+  - Saves full request config (method, url, params, headers, body, auth)
+
+EnvironmentManager.tsx
+  - Centered modal triggered by gear icon in Navbar
+  - List of environments with expand/collapse
+  - Green dot indicator for active environment
+  - Variable editor: checkbox, key, value (text/password), secret toggle, delete
+  - Inline rename for environments
+  - Help text showing {{variableName}} syntax
+
+7.4 UTILITY LIBRARIES
+---------------------
+
+lib/resolveVariables.ts
+  - resolveString(input, variableMap) -> { resolved, unresolved[] }
+  - buildVariableMap(envVariables) -> Map<string, string>
+  - findAllVariables(input) -> string[] (extracts all {{var}} names)
+  - collectUnresolved(texts[], variableMap) -> string[] (all unresolved across texts)
+
+  Pattern: /\{\{(\w+)\}\}/g  (matches {{word}} where word is [a-zA-Z0-9_])
+
+================================================================================
+8. FEATURE: REQUEST BUILDER & EXECUTION
+================================================================================
+
+8.1 BUILDING A REQUEST
+----------------------
+
+Users configure a request through the left panel:
+
+  1. Select HTTP method (GET, POST, PUT, PATCH, DELETE) from dropdown
+  2. Enter URL (supports {{variables}})
+  3. Add query parameters in Params tab (key-value with enable/disable)
+  4. Add headers in Headers tab (key-value with enable/disable)
+  5. Enter request body in Body tab (JSON textarea)
+  6. Configure auth in Auth tab:
+     - None: no auth headers
+     - Bearer Token: adds Authorization: Bearer <token>
+     - Basic Auth: adds Authorization: Basic <base64(input)>
+
+8.2 SENDING A REQUEST
+---------------------
+
+When Send is clicked (or Ctrl+Enter pressed):
+
+  1. Get active environment's variables, build variable map
+  2. Scan ALL fields for {{var}} patterns (URL, params, headers, body, auth)
+  3. If any unresolved variables found:
+     -> BLOCK the request
+     -> Show error: "Unresolved variables: {{var1}}, {{var2}}..."
+     -> Never silently replace with empty string
+  4. If all variables resolve:
+     -> Replace {{var}} with values in all fields
+     -> Build full URL with resolved query params
+     -> Build headers object with resolved values + auth header
+     -> POST to /api/requests/execute with resolved data
+  5. Backend proxies the request to the external API
+  6. Response is displayed in the right panel
+  7. History entry is recorded (method, url, status, time, timestamp)
+
+8.3 VIEWING THE RESPONSE
+-------------------------
+
+Right panel shows:
+  - Status: color-coded (green <300, yellow <400, red >=400)
+  - Time: response time in milliseconds
+  - Size: response body size in B or KB
+  - Body tab: pretty-printed JSON (or raw text if not valid JSON)
+  - Headers tab: key-value list of response headers
+
+Error states:
+  - Loading: spinner animation
+  - Error: red banner with error message
+  - Empty: "Send a request to see the response" + "Ctrl+Enter to send"
+
+8.4 KEYBOARD SHORTCUTS
+-----------------------
+
+  Ctrl+Enter (or Cmd+Enter on Mac): Send the current request
+
+================================================================================
+9. FEATURE: REQUEST TABS
+================================================================================
+
+9.1 TAB OPERATIONS
+------------------
+
+  - Create:    Click "+" button in tab bar
+  - Switch:    Click a tab
+  - Close:     Hover tab, click "x" (minimum 1 tab always kept)
+  - Duplicate:  Hover tab, click duplicate icon (deep copies entire tab state)
+
+Each tab is independent and stores:
+  - id, name, method, url
+  - params[] (key-value pairs)
+  - headers[] (key-value pairs)
+  - body (string)
+  - authType, authToken
+  - loading, response, error (transient)
+
+9.2 TAB PERSISTENCE
+--------------------
+
+  localStorage key: "reqbench-tabs"
+
+  Persisted: tabs[], activeTabId
+  Stripped on save: loading -> false, error -> null
+  On reload: all tabs restore with their full config and last response
+
+9.3 TAB NAME DERIVATION
+------------------------
+
+  Tab names auto-update based on the URL:
+    - Empty URL:     "New Request"
+    - Valid URL:     host + path (e.g., "api.example.com/users")
+    - Invalid URL:   first 30 chars of input
+
+  When closing a tab, the neighbor at the same position is selected
+  (or the last tab if closing the rightmost).
+
+================================================================================
+10. FEATURE: REQUEST HISTORY
+================================================================================
+
+10.1 HOW HISTORY IS RECORDED
+-----------------------------
+
+  After every sendRequest() call (success or error), an entry is added:
+    - method: HTTP method used
+    - url: full resolved URL (after variable substitution)
+    - status: HTTP status code (null if network error)
+    - responseTime: milliseconds (null if network error)
+    - timestamp: Date.now() when request was made
+
+  Recording is done by calling useHistoryStore.getState().addEntry()
+  directly from the request store (cross-store communication).
+
+10.2 HISTORY PANEL
+------------------
+
+  - Opens as a slide-over from the right (triggered by History button in Navbar)
+  - Search input filters by URL, method, or status code
+  - Each entry shows: method badge, truncated URL, status, time, relative timestamp
+  - Click an entry: creates new tab with that method + URL, closes panel
+  - Hover an entry: reveals delete button
+  - "Clear all" button in header
+  - Footer shows: "X / 50 requests stored"
+
+10.3 STORAGE LIMITS
+--------------------
+
+  - Maximum 50 entries (newest first, oldest trimmed)
+  - localStorage key: "reqbench-history"
+  - Persists across page refreshes
+
+================================================================================
+11. FEATURE: COLLECTIONS
+================================================================================
+
+11.1 DATA STRUCTURE
+--------------------
+
+  Collection
+    |-- id: string (UUID)
+    |-- name: string ("My API", "Production", etc.)
+    |-- folders: CollectionFolder[]
+    |   |-- id: string (UUID)
+    |   |-- name: string ("Auth Endpoints", "Users", etc.)
+    |   |-- requests: SavedRequest[]
+    |-- requests: SavedRequest[] (root-level, not in any folder)
+
+  SavedRequest
+    |-- id: string (UUID)
+    |-- name: string
+    |-- method: HttpMethod
+    |-- url: string (raw, may contain {{variables}})
+    |-- params: KeyValuePair[]
+    |-- headers: KeyValuePair[]
+    |-- body: string
+    |-- authType: 'none' | 'bearer' | 'basic'
+    |-- authToken: string
+
+  A SavedRequest stores the FULL request configuration. When reopened,
+  everything is restored exactly as saved.
+
+11.2 COLLECTION OPERATIONS
+---------------------------
+
+  - Create:    "New Collection" button in panel header
+  - Rename:    Hover collection, click pencil icon (inline edit)
+  - Delete:    Hover collection, click "x" (deletes everything inside)
+  - Duplicate:  Hover collection, click duplicate icon
+                (deep copy with new UUIDs, "(copy)" suffix)
+
+11.3 FOLDER OPERATIONS
+-----------------------
+
+  - Create:    Hover collection, click "+folder" icon
+  - Rename:    Hover folder, click pencil icon (inline edit)
+  - Delete:    Hover folder, click "x" (deletes all requests inside)
+
+11.4 SAVED REQUEST OPERATIONS
+------------------------------
+
+  - Save:      Click "Save" button in RequestBuilder -> SaveRequestModal
+  - Open:      Click a saved request in Collections panel (loads into new tab)
+  - Duplicate:  Hover request, click duplicate icon ("(copy)" suffix)
+  - Delete:    Hover request, click "x"
+
+11.5 SAVE MODAL
+----------------
+
+  When clicking "Save" next to the Send button:
+    1. Request name field (pre-filled with tab name)
+    2. Collection picker (dropdown of existing, or create new)
+    3. Folder picker (optional, only if collection has folders)
+    4. Save button: stores full request config into selected location
+
+================================================================================
+12. FEATURE: ENVIRONMENT VARIABLES
+================================================================================
+
+12.1 ENVIRONMENT STRUCTURE
+---------------------------
+
+  Environment
+    |-- id: string (UUID)
+    |-- name: string ("Development", "Production", etc.)
+    |-- variables: EnvVariable[]
+        |-- key: string ("baseUrl", "apiKey", etc.)
+        |-- value: string ("http://localhost:3001", "sk-...", etc.)
+        |-- secret: boolean (hides value in UI when true)
+        |-- enabled: boolean (disabled variables are skipped during resolution)
+
+  Default environment on first load:
+    Name: "Development"
+    Variables: baseUrl = http://localhost:3001
+
+12.2 VARIABLE SYNTAX
+---------------------
+
+  Use {{variableName}} anywhere in:
+    - URL field
+    - Query parameter keys and values
+    - Header keys and values
+    - Request body
+    - Auth token field
+
+  Examples:
+    {{baseUrl}}/api/users
+    Authorization: Bearer {{apiKey}}
+    {"userId": "{{userId}}"}
+
+  Pattern: /\{\{(\w+)\}\}/g
+  Variable names must be word characters: [a-zA-Z0-9_]
+
+12.3 RESOLUTION FLOW
+---------------------
+
+  1. User types raw request with {{variables}}
+  2. UI shows live resolved preview below URL bar
+  3. On Send:
+     a. Get active environment's variables
+     b. Build Map<string, string> from enabled variables
+     c. Scan ALL fields (URL, params, headers, body, auth) for {{var}}
+     d. If any variable is not in the map -> BLOCK request with error
+     e. If all resolve -> replace {{var}} with values, then send
+
+  Variables are resolved at SEND TIME, not at edit time. The raw {{var}}
+  syntax is always preserved in the tab's stored state.
+
+12.4 UNRESOLVED VARIABLE HANDLING
+----------------------------------
+
+  Unresolved variables are NEVER silently replaced with empty strings.
+
+  In the UI:
+    - Yellow warning below URL bar: "Unresolved: {{varName}}"
+    - Shows while typing (live feedback)
+
+  On Send:
+    - Request is BLOCKED
+    - Error displayed: "Unresolved variables: {{var1}}, {{var2}}.
+      Define them in the active environment or remove them."
+
+  To fix:
+    - Add the variable to the active environment, or
+    - Switch to an environment that has it, or
+    - Remove the {{var}} from the request
+
+12.5 SECRET VARIABLES
+----------------------
+
+  Variables can be marked as "secret" in the Environment Manager.
+  - Value field uses type="password" (shows dots instead of text)
+  - Functionally identical: resolves the same way at send time
+  - Purpose: hide sensitive values (API keys, tokens) from shoulder-surfing
+
+12.6 ENVIRONMENT MANAGER
+--------------------------
+
+  Opened via the gear icon next to the environment dropdown in Navbar.
+
+  Features:
+    - List of all environments with expand/collapse
+    - Green dot: click to set as active (click again to deactivate)
+    - "active" label shown next to the active environment
+    - Variable editor per environment:
+      - Checkbox (enable/disable)
+      - Key input (monospace)
+      - Value input (text or password based on secret flag)
+      - Secret checkbox
+      - Delete button
+      - "+ Add variable" button
+    - Inline rename for environment names
+    - "+ New Environment" button
+    - Help text at bottom explaining {{var}} syntax
+
+================================================================================
+13. LOCALSTORAGE KEYS
+================================================================================
+
+  Key                      | Store                  | Contents
+  -------------------------+------------------------+---------------------------
+  reqbench-tabs            | useRequestStore        | tabs[], activeTabId
+  reqbench-history         | useHistoryStore         | entries[] (max 50)
+  reqbench-collections     | useCollectionStore      | collections[] with folders
+  reqbench-environments    | useEnvironmentStore     | environments[], activeId
+
+  All keys use Zustand's persist middleware with JSON serialization.
+  Clearing a key in DevTools > Application > Local Storage resets that feature.
+
+================================================================================
+14. BACKEND .ENV CONFIGURATION
+================================================================================
+
+  File: server/.env
+
+  DB_URL=postgresql://...    (Neon PostgreSQL - NOT connected yet)
+  GROQ_API=gsk_...           (Groq API key - NOT connected yet)
+
+  These keys are available for future features:
+    - DB_URL: for persistent storage (history, collections, user accounts)
+    - GROQ_API: for AI-powered features (request generation, response analysis)
+
+  Currently, the backend is stateless. All persistence is in the browser.
+
+================================================================================
+15. WHAT HAS NOT BEEN IMPLEMENTED YET
+================================================================================
+
+  Not started:
+    - Database integration (Neon PostgreSQL is configured but not connected)
+    - User accounts / authentication
+    - Shared collections / team features
+    - Request history on server-side
+    - Postman / OpenAPI import/export
+    - Drag-and-drop reorder in collections
+    - WebSocket testing
+    - GraphQL support
+    - Response benchmarking / comparison
+    - Pre-request scripts / test scripts
+    - Cookie management
+    - Proxy settings
+    - File upload in request body
+    - Binary response handling
+    - Code generation (curl, fetch, axios, etc.)
+    - Groq AI integration
+
+  Partially ready:
+    - Auth token resolution in environment variables (implemented, works)
+    - Collection sharing (data structure supports it, no backend yet)
+
+================================================================================
+16. TESTING GUIDE
+================================================================================
+
+TESTING THE HEALTH CHECK:
+  1. Start backend: cd server && npm run dev
+  2. curl http://localhost:3001/api/health
+  3. Expected: {"status":"ok"}
+
+TESTING A GET REQUEST:
+  1. Start both servers
+  2. Open http://localhost:5173
+  3. Enter URL: https://jsonplaceholder.typicode.com/todos/1
+  4. Click Send (or Ctrl+Enter)
+  5. Right panel shows: 200 OK, response time, JSON body
+
+TESTING A POST REQUEST:
+  1. Change method to POST
+  2. URL: https://jsonplaceholder.typicode.com/posts
+  3. Headers tab: add Content-Type = application/json
+  4. Body tab: {"title": "test", "body": "hello", "userId": 1}
+  5. Click Send
+  6. Right panel shows: 201 Created
+
+TESTING TABS:
+  1. Click "+" to add tabs
+  2. Fill different URLs in each tab
+  3. Switch between tabs - each preserves its own state
+  4. Hover a tab to see duplicate and close buttons
+  5. Refresh the page - all tabs restore
+
+TESTING HISTORY:
+  1. Send a few requests
+  2. Click "History" in navbar
+  3. Search by URL, method, or status code
+  4. Click an entry to reopen it in a new tab
+  5. Hover entries to delete individually
+
+TESTING COLLECTIONS:
+  1. Fill in a request with URL, headers, body
+  2. Click "Save" next to Send
+  3. Create a new collection, give it a name, click Save
+  4. Click "Collections" in navbar
+  5. Expand the collection, click the saved request to reopen it
+  6. Hover items for rename, duplicate, delete actions
+  7. Add folders inside collections for organization
+
+TESTING ENVIRONMENT VARIABLES:
+  1. Click the gear icon next to the environment dropdown
+  2. The "Development" env should exist with baseUrl = http://localhost:3001
+  3. Close the manager
+  4. In the URL field, type: {{baseUrl}}/api/health
+  5. A resolved preview appears: http://localhost:3001/api/health
+  6. Click Send - should return {"status":"ok"}
+  7. Create a "Production" env with baseUrl = https://jsonplaceholder.typicode.com
+  8. Switch to Production in the dropdown
+  9. The preview updates instantly
+  10. Change URL to {{baseUrl}}/todos/1 and Send
+
+TESTING UNRESOLVED VARIABLES:
+  1. Type {{baseUrl}}/users/{{userId}} in URL
+  2. If userId is not defined: yellow warning appears
+  3. Click Send - request is BLOCKED with error message
+  4. Add userId variable to active environment
+  5. Warning disappears, Send now works
+
+TESTING PERSISTENCE:
+  1. Set up tabs, collections, history, environments
+  2. Hard refresh (F5)
+  3. Everything restores from localStorage
+  4. Check DevTools > Application > Local Storage for raw data
+
+================================================================================
+END OF DOCUMENTATION
+================================================================================

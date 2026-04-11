@@ -4,7 +4,19 @@
       "Bash(npm create:*)",
       "Bash(npm install:*)",
       "Bash(npm init:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npx prisma:*)",
+      "Bash(node ./node_modules/prisma/build/index.js init)",
+      "Bash(ls D:/ReqBenchWeb/server/src/generated/prisma/index*)",
+      "Bash(npm list:*)",
+      "Bash(node:*)",
+      "Bash(npm show:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(timeout 15 npx tsx src/index.ts)",
+      "Bash(curl -s http://localhost:3001/api/health/db)",
+      "Bash(curl -s http://localhost:3001/api/health)",
+      "Bash(npx tsx:*)",
+      "Bash(kill %1)"
     ]
   }
 }
