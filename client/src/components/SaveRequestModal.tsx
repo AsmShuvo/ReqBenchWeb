@@ -1,10 +1,14 @@
 import { useState } from 'react'
 import { useCollectionStore } from '../store/useCollectionStore'
 import { useRequestStore } from '../store/useRequestStore'
+import { useToast } from '../store/useToastStore'
+import { useEscape } from '../lib/useEscape'
 
 export default function SaveRequestModal({ onClose }: { onClose: () => void }) {
+  useEscape(onClose)
   const { collections, createCollection, saveRequest } = useCollectionStore()
   const { tabs, activeTabId } = useRequestStore()
+  const toast = useToast()
 
   const tab = tabs.find((t) => t.id === activeTabId)
 
@@ -42,14 +46,17 @@ export default function SaveRequestModal({ onClose }: { onClose: () => void }) {
       authToken: tab.authToken,
     })
 
+    const coll = useCollectionStore.getState().collections.find((c) => c.id === collId)
+    toast.success(`Saved to "${coll?.name ?? 'collection'}"`)
     onClose()
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog" aria-modal="true" aria-labelledby="save-modal-title">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div className="relative bg-gray-900 border border-gray-700 rounded-lg w-full max-w-md p-5 space-y-4">
-        <h3 className="text-lg font-semibold text-white">Save Request</h3>
+        <h3 id="save-modal-title" className="text-lg font-semibold text-white">Save Request</h3>
 
         {/* Request name */}
         <div>

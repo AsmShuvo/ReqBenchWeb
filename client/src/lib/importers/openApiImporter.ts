@@ -88,7 +88,11 @@ function parseYaml(text: string): unknown {
   // Lightweight YAML parser for OpenAPI specs
   // Handles: objects, arrays, strings, numbers, booleans, nulls, multi-line strings
   const lines = text.split('\n')
+<<<<<<< HEAD
   return parseYamlLines(lines, 0, 0).value
+=======
+  return parseYamlLines(lines, 0).value
+>>>>>>> 2894d4a (update readme)
 }
 
 interface YamlResult {
@@ -136,7 +140,11 @@ function parseYamlValue(raw: string): unknown {
   return trimmed
 }
 
+<<<<<<< HEAD
 function parseYamlLines(lines: string[], startLine: number, minIndent: number): YamlResult {
+=======
+function parseYamlLines(lines: string[], startLine: number): YamlResult {
+>>>>>>> 2894d4a (update readme)
   let i = startLine
 
   // Skip blanks and comments
@@ -171,7 +179,11 @@ function parseYamlLines(lines: string[], startLine: number, minIndent: number): 
             j++
           } else break
         }
+<<<<<<< HEAD
         const result = parseYamlLines(subLines, 0, curIndent + 2)
+=======
+        const result = parseYamlLines(subLines, 0)
+>>>>>>> 2894d4a (update readme)
         arr.push(result.value)
         i = j
       } else {
@@ -213,7 +225,11 @@ function parseYamlLines(lines: string[], startLine: number, minIndent: number): 
           }
           obj[key] = valueAfterColon === '|' ? strLines.join('\n') : strLines.join(' ')
         } else {
+<<<<<<< HEAD
           const result = parseYamlLines(lines, i, indent + 1)
+=======
+          const result = parseYamlLines(lines, i)
+>>>>>>> 2894d4a (update readme)
           obj[key] = result.value
           i = result.nextLine
         }

@@ -3,6 +3,8 @@ import { useRequestStore, type KeyValuePair } from '../store/useRequestStore'
 import { useEnvironmentStore } from '../store/useEnvironmentStore'
 import { resolveString, buildVariableMap } from '../lib/resolveVariables'
 import { generators, type CodegenRequest } from '../lib/codegen'
+import { useEscape } from '../lib/useEscape'
+import { useToast } from '../store/useToastStore'
 
 function buildResolvedRequest(
   tab: {
@@ -65,6 +67,8 @@ function buildResolvedRequest(
 }
 
 export default function CodeGenModal({ onClose }: { onClose: () => void }) {
+  useEscape(onClose)
+  const toast = useToast()
   const { tabs, activeTabId } = useRequestStore()
   const { environments, activeEnvironmentId } = useEnvironmentStore()
   const [activeGenId, setActiveGenId] = useState(generators[0].id)
@@ -88,6 +92,7 @@ export default function CodeGenModal({ onClose }: { onClose: () => void }) {
   const handleCopy = async () => {
     await navigator.clipboard.writeText(code)
     setCopied(true)
+    toast.success('Code copied to clipboard')
     setTimeout(() => setCopied(false), 2000)
   }
 

@@ -5,7 +5,12 @@ import {
   type FixRequestResult, type ExplainResponseResult,
   type GenerateTestsResult, type NlRequestResult,
 } from '../lib/aiClient'
+<<<<<<< HEAD
 import { useAiLimitStore } from '../store/useAiLimitStore'
+=======
+import { useToast } from '../store/useToastStore'
+import { useEscape } from '../lib/useEscape'
+>>>>>>> 2894d4a (update readme)
 
 export type AiMode = 'fix' | 'explain' | 'tests' | 'nl'
 
@@ -22,6 +27,7 @@ const titles: Record<AiMode, string> = {
 }
 
 export default function AiModal({ mode, onClose }: Props) {
+<<<<<<< HEAD
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
@@ -29,6 +35,17 @@ export default function AiModal({ mode, onClose }: Props) {
         <div className="flex items-center justify-between p-4 border-b border-gray-800">
           <h2 className="text-lg font-semibold text-white">{titles[mode]}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white text-xl cursor-pointer px-1">&times;</button>
+=======
+  useEscape(onClose)
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog" aria-modal="true" aria-labelledby="ai-modal-title">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative bg-gray-900 border border-gray-700 rounded-lg w-full max-w-2xl max-h-[85vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-gray-800">
+          <h2 id="ai-modal-title" className="text-lg font-semibold text-white">{titles[mode]}</h2>
+          <button onClick={onClose} aria-label="Close dialog" className="text-gray-400 hover:text-white text-xl cursor-pointer px-1">&times;</button>
+>>>>>>> 2894d4a (update readme)
         </div>
         <div className="flex-1 overflow-auto p-4">
           {mode === 'fix' && <FixPanel onClose={onClose} />}
@@ -84,14 +101,22 @@ function ErrorBox({ message }: { message: string }) {
 
 function FixPanel({ onClose }: { onClose: () => void }) {
   const { tab, updateTab } = useActiveTab()
+<<<<<<< HEAD
   const [loading, setLoading] = useState(true)
+=======
+  const toast = useToast()
+  const [loading, setLoading] = useState(() => Boolean(tab))
+>>>>>>> 2894d4a (update readme)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<FixRequestResult | null>(null)
 
   useEffect(() => {
     let cancelled = false
     if (!tab) return
+<<<<<<< HEAD
     setLoading(true); setError(null)
+=======
+>>>>>>> 2894d4a (update readme)
     aiClient.fixRequest({
       method: tab.method,
       url: tab.url,
@@ -121,6 +146,10 @@ function FixPanel({ onClose }: { onClose: () => void }) {
       headers: kvFromHeaders(result.headers),
       body: result.body ?? '',
     })
+<<<<<<< HEAD
+=======
+    toast.success('Applied AI fix to current tab')
+>>>>>>> 2894d4a (update readme)
     onClose()
   }
 
@@ -164,14 +193,21 @@ function FixPanel({ onClose }: { onClose: () => void }) {
 
 function ExplainPanel() {
   const { tab } = useActiveTab()
+<<<<<<< HEAD
   const [loading, setLoading] = useState(true)
+=======
+  const [loading, setLoading] = useState(() => Boolean(tab?.response))
+>>>>>>> 2894d4a (update readme)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<ExplainResponseResult | null>(null)
 
   useEffect(() => {
     let cancelled = false
     if (!tab || !tab.response) return
+<<<<<<< HEAD
     setLoading(true); setError(null)
+=======
+>>>>>>> 2894d4a (update readme)
     aiClient.explainResponse({
       request: {
         method: tab.method,
@@ -215,7 +251,12 @@ function ExplainPanel() {
 
 function TestsPanel() {
   const { tab } = useActiveTab()
+<<<<<<< HEAD
   const [loading, setLoading] = useState(true)
+=======
+  const toast = useToast()
+  const [loading, setLoading] = useState(() => Boolean(tab?.response))
+>>>>>>> 2894d4a (update readme)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<GenerateTestsResult | null>(null)
   const [copied, setCopied] = useState(false)
@@ -223,7 +264,10 @@ function TestsPanel() {
   useEffect(() => {
     let cancelled = false
     if (!tab || !tab.response) return
+<<<<<<< HEAD
     setLoading(true); setError(null)
+=======
+>>>>>>> 2894d4a (update readme)
     aiClient.generateTests({
       request: {
         method: tab.method,
@@ -254,6 +298,10 @@ function TestsPanel() {
   const copy = async () => {
     await navigator.clipboard.writeText(result.code)
     setCopied(true)
+<<<<<<< HEAD
+=======
+    toast.success('Test code copied')
+>>>>>>> 2894d4a (update readme)
     setTimeout(() => setCopied(false), 2000)
   }
 
@@ -283,6 +331,10 @@ function TestsPanel() {
 
 function NlPanel({ onClose }: { onClose: () => void }) {
   const { tab, updateTab } = useActiveTab()
+<<<<<<< HEAD
+=======
+  const toast = useToast()
+>>>>>>> 2894d4a (update readme)
   const [prompt, setPrompt] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -309,6 +361,10 @@ function NlPanel({ onClose }: { onClose: () => void }) {
       headers: kvFromHeaders(result.headers),
       body: result.body ?? '',
     })
+<<<<<<< HEAD
+=======
+    toast.success('Request filled from description')
+>>>>>>> 2894d4a (update readme)
     onClose()
   }
 

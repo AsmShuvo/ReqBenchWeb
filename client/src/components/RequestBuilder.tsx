@@ -136,7 +136,7 @@ export default function RequestBuilder() {
   return (
     <div className="flex flex-col h-full">
       {/* URL Bar */}
-      <div className="flex items-center gap-2 p-3 border-b border-gray-800">
+      <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-800">
         <select
           value={tab.method}
           onChange={(e) => updateTab(tab.id, { method: e.target.value as HttpMethod })}
@@ -151,9 +151,10 @@ export default function RequestBuilder() {
         <input
           type="text"
           placeholder="Enter URL..."
+          aria-label="Request URL"
           value={tab.url}
           onChange={(e) => updateTab(tab.id, { url: e.target.value })}
-          className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 outline-none focus:border-blue-500"
+          className="flex-1 min-w-[160px] bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 outline-none focus:border-blue-500"
         />
         <button
           onClick={() => setNlOpen(true)}

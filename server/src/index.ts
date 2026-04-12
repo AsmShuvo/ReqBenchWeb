@@ -4,6 +4,13 @@ import cors from 'cors'
 import { prisma } from './lib/prisma'
 import { runBenchmark } from './lib/benchmark'
 import { callGroq, groqConfigured, safeParseJson } from './lib/groq'
+<<<<<<< HEAD
+=======
+import {
+  hashPassword, verifyPassword, signToken, requireAuth, isValidEmail,
+} from './lib/auth'
+import { readSnapshot, writeSnapshot, mergeSnapshots, type SyncSnapshot } from './lib/sync'
+>>>>>>> 2894d4a (update readme)
 
 const app = express()
 const PORT = 3001
@@ -337,6 +344,133 @@ app.post('/api/ai/nl-to-request', async (req, res) => {
   }
 })
 
+<<<<<<< HEAD
+=======
+// ─── Auth routes ──────────────────────────────────────────────────────────
+
+app.post('/api/auth/signup', async (req, res) => {
+  const { email, password, name } = req.body ?? {}
+  if (!isValidEmail(email)) {
+    res.status(400).json({ error: 'Valid email is required' })
+    return
+  }
+  if (typeof password !== 'string' || password.length < 8) {
+    res.status(400).json({ error: 'Password must be at least 8 characters' })
+    return
+  }
+
+  try {
+    const existing = await prisma.user.findUnique({ where: { email } })
+    if (existing) {
+      res.status(409).json({ error: 'An account with that email already exists' })
+      return
+    }
+    const passwordHash = await hashPassword(password)
+    const user = await prisma.user.create({
+      data: {
+        email,
+        name: typeof name === 'string' && name.trim() ? name.trim() : null,
+        passwordHash,
+      },
+      select: { id: true, email: true, name: true },
+    })
+    const token = signToken({ userId: user.id, email: user.email })
+    res.json({ token, user })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    res.status(500).json({ error: `Signup failed: ${message}` })
+  }
+})
+
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body ?? {}
+  if (!isValidEmail(email) || typeof password !== 'string') {
+    res.status(400).json({ error: 'Email and password are required' })
+    return
+  }
+  try {
+    const user = await prisma.user.findUnique({ where: { email } })
+    if (!user || !user.passwordHash) {
+      res.status(401).json({ error: 'Invalid email or password' })
+      return
+    }
+    const ok = await verifyPassword(password, user.passwordHash)
+    if (!ok) {
+      res.status(401).json({ error: 'Invalid email or password' })
+      return
+    }
+    const token = signToken({ userId: user.id, email: user.email })
+    res.json({
+      token,
+      user: { id: user.id, email: user.email, name: user.name },
+    })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    res.status(500).json({ error: `Login failed: ${message}` })
+  }
+})
+
+// Logout is stateless with JWTs — the client just drops the token.
+// We keep the endpoint for symmetry and future server-side allowlist / blacklist.
+app.post('/api/auth/logout', (_req, res) => {
+  res.json({ ok: true })
+})
+
+app.get('/api/auth/me', requireAuth, async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.user!.userId },
+    select: { id: true, email: true, name: true, createdAt: true },
+  })
+  if (!user) {
+    res.status(404).json({ error: 'User not found' })
+    return
+  }
+  res.json({ user })
+})
+
+// ─── Sync routes (authenticated) ──────────────────────────────────────────
+
+app.get('/api/sync/state', requireAuth, async (req, res) => {
+  try {
+    const snap = await readSnapshot(req.user!.userId)
+    res.json(snap)
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    res.status(500).json({ error: `Read failed: ${message}` })
+  }
+})
+
+app.post('/api/sync/push', requireAuth, async (req, res) => {
+  const snap = req.body as SyncSnapshot
+  if (!snap || !Array.isArray(snap.collections) || !Array.isArray(snap.history) || !Array.isArray(snap.environments)) {
+    res.status(400).json({ error: 'Snapshot must include collections[], history[], environments[]' })
+    return
+  }
+  try {
+    await writeSnapshot(req.user!.userId, snap)
+    res.json({ ok: true })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    res.status(500).json({ error: `Push failed: ${message}` })
+  }
+})
+
+app.post('/api/sync/merge', requireAuth, async (req, res) => {
+  const snap = req.body as SyncSnapshot
+  if (!snap || !Array.isArray(snap.collections) || !Array.isArray(snap.history) || !Array.isArray(snap.environments)) {
+    res.status(400).json({ error: 'Snapshot must include collections[], history[], environments[]' })
+    return
+  }
+  try {
+    const merged = await mergeSnapshots(req.user!.userId, snap)
+    res.json(merged)
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    res.status(500).json({ error: `Merge failed: ${message}` })
+  }
+})
+
+>>>>>>> 2894d4a (update readme)
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)
 })

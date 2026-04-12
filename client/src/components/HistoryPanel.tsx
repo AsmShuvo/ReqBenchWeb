@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useEscape } from '../lib/useEscape'
 import { useHistoryStore, type HistoryEntry } from '../store/useHistoryStore'
 import { useRequestStore } from '../store/useRequestStore'
 
@@ -47,6 +48,7 @@ function truncateUrl(url: string): string {
 }
 
 export default function HistoryPanel({ onClose }: { onClose: () => void }) {
+  useEscape(onClose)
   const { entries, removeEntry, clearAll } = useHistoryStore()
   const { addTab, updateTab, setActiveTab } = useRequestStore()
   const [search, setSearch] = useState('')

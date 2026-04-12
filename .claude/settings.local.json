@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+<<<<<<< HEAD
       "Bash(npm create:*)",
       "Bash(npm install:*)",
       "Bash(npm init:*)",
@@ -20,6 +21,9 @@
       "Bash(curl:*)",
       "Bash(npx kill-port:*)",
       "Bash(taskkill //F //IM node.exe)"
+=======
+      "Bash(find:*)"
+>>>>>>> 2894d4a (update readme)
     ]
   }
 }

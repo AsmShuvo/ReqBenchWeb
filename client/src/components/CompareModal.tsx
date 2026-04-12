@@ -9,6 +9,7 @@ import {
   type DiffEntry,
   type LineDiff,
 } from '../lib/diff'
+import { useEscape } from '../lib/useEscape'
 
 // ─── Candidate builder ──────────────────────────────────────────────────────
 
@@ -45,7 +46,7 @@ function useCandidates(): Candidate[] {
       const snap: ResponseSnapshot = {
         id: `tab-${tab.id}`,
         response: tab.response,
-        timestamp: Date.now(),
+        timestamp: 0,
         label: `${tab.method} ${tab.response.status}`,
       }
       candidates.push({
@@ -171,6 +172,7 @@ function TextDiffView({ diffs }: { diffs: LineDiff[] }) {
 // ─── Compare Modal ──────────────────────────────────────────────────────────
 
 export default function CompareModal({ onClose }: { onClose: () => void }) {
+  useEscape(onClose)
   const candidates = useCandidates()
   const [leftId, setLeftId] = useState(candidates[0]?.id ?? '')
   const [rightId, setRightId] = useState(candidates[1]?.id ?? '')

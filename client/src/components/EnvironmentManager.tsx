@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useEscape } from '../lib/useEscape'
 import {
   useEnvironmentStore,
   type Environment,
@@ -200,6 +201,7 @@ function EnvironmentItem({ env }: { env: Environment }) {
 }
 
 export default function EnvironmentManager({ onClose }: { onClose: () => void }) {
+  useEscape(onClose)
   const { environments, createEnvironment } = useEnvironmentStore()
   const [creatingNew, setCreatingNew] = useState(false)
 

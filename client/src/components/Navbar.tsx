@@ -1,7 +1,15 @@
+import { useState } from 'react'
 import { useHistoryStore } from '../store/useHistoryStore'
 import { useCollectionStore } from '../store/useCollectionStore'
 import { useEnvironmentStore } from '../store/useEnvironmentStore'
 import { useAiLimitStore, DAILY_AI_LIMIT } from '../store/useAiLimitStore'
+<<<<<<< HEAD
+=======
+import { useAuthStore } from '../store/useAuthStore'
+import { logout as syncLogout } from '../lib/syncManager'
+import { useToast } from '../store/useToastStore'
+import AuthModal from './AuthModal'
+>>>>>>> 2894d4a (update readme)
 
 interface NavbarProps {
   onToggleHistory: () => void
@@ -29,11 +37,28 @@ export default function Navbar({
     return Math.max(0, DAILY_AI_LIMIT - used)
   })
   const aiUsed = DAILY_AI_LIMIT - aiRemaining
+<<<<<<< HEAD
+=======
+
+  const user = useAuthStore((s) => s.user)
+  const toast = useToast()
+  const [authOpen, setAuthOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+
+  const handleLogout = async () => {
+    await syncLogout()
+    setUserMenuOpen(false)
+    toast.info('Signed out — local data preserved')
+  }
+>>>>>>> 2894d4a (update readme)
 
   const activeEnv = environments.find((e) => e.id === activeEnvironmentId)
 
   return (
-    <nav className="h-12 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-4 shrink-0">
+    <nav
+      aria-label="Main"
+      className="min-h-12 bg-gray-900 border-b border-gray-800 flex items-center justify-between gap-2 px-3 sm:px-4 shrink-0 overflow-x-auto"
+    >
       <div className="flex items-center gap-3">
         <span className="text-lg font-bold text-white tracking-tight">
           ReqBench
@@ -126,7 +151,57 @@ export default function Navbar({
             </span>
           )}
         </button>
+
+        <div className="w-px h-5 bg-gray-700" />
+
+        {/* Auth */}
+        {user ? (
+          <div className="relative">
+            <button
+              onClick={() => setUserMenuOpen((o) => !o)}
+              className="flex items-center gap-1.5 text-sm text-gray-300 hover:text-white cursor-pointer px-2 py-1 rounded hover:bg-gray-800"
+              aria-haspopup="menu"
+              aria-expanded={userMenuOpen}
+              title={`Signed in as ${user.email}`}
+            >
+              <span className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-xs font-semibold">
+                {(user.name || user.email).charAt(0).toUpperCase()}
+              </span>
+              <span className="hidden sm:inline max-w-[140px] truncate">{user.name || user.email}</span>
+            </button>
+            {userMenuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full mt-1 w-56 bg-gray-900 border border-gray-700 rounded shadow-lg py-1 z-50"
+              >
+                <div className="px-3 py-2 text-xs text-gray-500 border-b border-gray-800">
+                  Signed in as<br />
+                  <span className="text-gray-300 break-all">{user.email}</span>
+                </div>
+                <div className="px-3 py-2 text-xs text-green-400 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                  Cloud sync active
+                </div>
+                <button
+                  role="menuitem"
+                  onClick={handleLogout}
+                  className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 cursor-pointer"
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <button
+            onClick={() => setAuthOpen(true)}
+            className="text-sm text-gray-300 hover:text-white cursor-pointer px-3 py-1.5 rounded border border-gray-700 hover:border-gray-600"
+          >
+            Sign In
+          </button>
+        )}
       </div>
+      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
     </nav>
   )
 }

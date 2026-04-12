@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useEscape } from '../lib/useEscape'
 import {
   useCollectionStore,
   type Collection,
@@ -307,6 +308,7 @@ function CollectionItem({
 }
 
 export default function CollectionsPanel({ onClose }: { onClose: () => void }) {
+  useEscape(onClose)
   const { collections, createCollection } = useCollectionStore()
   const { addTab, updateTab, setActiveTab } = useRequestStore()
   const [creatingNew, setCreatingNew] = useState(false)
