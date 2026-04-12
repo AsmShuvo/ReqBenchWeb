@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useRequestStore } from '../store/useRequestStore'
 import CompareModal from './CompareModal'
+import AiModal, { type AiMode } from './AiModal'
 
 type ResponseTab = 'Body' | 'Headers'
 
@@ -27,6 +28,7 @@ export default function ResponseViewer() {
   const { tabs, activeTabId } = useRequestStore()
   const [activeTab, setActiveTab] = useState<ResponseTab>('Body')
   const [compareOpen, setCompareOpen] = useState(false)
+  const [aiMode, setAiMode] = useState<AiMode | null>(null)
 
   const tab = tabs.find((t) => t.id === activeTabId)
   const response = tab?.response
@@ -71,8 +73,43 @@ export default function ResponseViewer() {
           )}
         </div>
 
-        {/* Compare button */}
-        <div className="ml-auto">
+        {/* Right-side actions */}
+        <div className="ml-auto flex items-center gap-1.5">
+          {/* AI actions — shown when we have a response or an error */}
+          {(response || error) && (
+            <>
+              {(error || (response && response.status >= 400)) && (
+                <button
+                  onClick={() => setAiMode('fix')}
+                  className="text-xs text-purple-300 hover:text-purple-200 cursor-pointer px-2 py-1 rounded border border-purple-500/40 hover:border-purple-500/60"
+                  title="Ask AI to fix this failing request"
+                >
+                  ✨ Fix with AI
+                </button>
+              )}
+              {response && (
+                <>
+                  <button
+                    onClick={() => setAiMode('explain')}
+                    className="text-xs text-purple-300 hover:text-purple-200 cursor-pointer px-2 py-1 rounded border border-purple-500/40 hover:border-purple-500/60"
+                    title="Explain this response"
+                  >
+                    ✨ Explain
+                  </button>
+                  {response.status < 400 && (
+                    <button
+                      onClick={() => setAiMode('tests')}
+                      className="text-xs text-purple-300 hover:text-purple-200 cursor-pointer px-2 py-1 rounded border border-purple-500/40 hover:border-purple-500/60"
+                      title="Generate tests from this response"
+                    >
+                      ✨ Tests
+                    </button>
+                  )}
+                </>
+              )}
+            </>
+          )}
+
           {candidateCount >= 2 && (
             <button
               onClick={() => setCompareOpen(true)}
@@ -158,6 +195,7 @@ export default function ResponseViewer() {
       </div>
 
       {compareOpen && <CompareModal onClose={() => setCompareOpen(false)} />}
+      {aiMode && <AiModal mode={aiMode} onClose={() => setAiMode(null)} />}
     </div>
   )
 }

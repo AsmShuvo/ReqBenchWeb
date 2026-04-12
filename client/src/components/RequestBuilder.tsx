@@ -4,6 +4,9 @@ import { useEnvironmentStore } from '../store/useEnvironmentStore'
 import { resolveString, buildVariableMap, collectUnresolved } from '../lib/resolveVariables'
 import SaveRequestModal from './SaveRequestModal'
 import CodeGenModal from './CodeGenModal'
+import BenchmarkModal from './BenchmarkModal'
+import ImportModal from './ImportModal'
+import AiModal from './AiModal'
 
 const methods: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 
@@ -86,6 +89,9 @@ export default function RequestBuilder() {
   const [activeBuilderTab, setActiveBuilderTab] = useState<BuilderTab>('Params')
   const [saveModalOpen, setSaveModalOpen] = useState(false)
   const [codeGenOpen, setCodeGenOpen] = useState(false)
+  const [benchmarkOpen, setBenchmarkOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [nlOpen, setNlOpen] = useState(false)
   const tab = tabs.find((t) => t.id === activeTabId)
 
   const activeEnv = environments.find((e) => e.id === activeEnvironmentId)
@@ -150,11 +156,32 @@ export default function RequestBuilder() {
           className="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 outline-none focus:border-blue-500"
         />
         <button
+          onClick={() => setNlOpen(true)}
+          className="text-purple-300 hover:text-purple-200 text-sm px-3 py-1.5 rounded cursor-pointer border border-purple-500/40 hover:border-purple-500/60"
+          title="Generate request from natural language"
+        >
+          ✨ NL
+        </button>
+        <button
+          onClick={() => setImportOpen(true)}
+          className="text-gray-400 hover:text-white hover:bg-gray-800 text-sm px-3 py-1.5 rounded cursor-pointer border border-gray-700"
+          title="Import (cURL, Postman, OpenAPI)"
+        >
+          Import
+        </button>
+        <button
           onClick={() => setCodeGenOpen(true)}
           className="text-gray-400 hover:text-white hover:bg-gray-800 text-sm px-3 py-1.5 rounded cursor-pointer border border-gray-700"
           title="Generate Code"
         >
           &lt;/&gt;
+        </button>
+        <button
+          onClick={() => setBenchmarkOpen(true)}
+          className="text-gray-400 hover:text-white hover:bg-gray-800 text-sm px-3 py-1.5 rounded cursor-pointer border border-gray-700"
+          title="Benchmark"
+        >
+          Bench
         </button>
         <button
           onClick={() => setSaveModalOpen(true)}
@@ -262,6 +289,9 @@ export default function RequestBuilder() {
       </div>
       {saveModalOpen && <SaveRequestModal onClose={() => setSaveModalOpen(false)} />}
       {codeGenOpen && <CodeGenModal onClose={() => setCodeGenOpen(false)} />}
+      {benchmarkOpen && <BenchmarkModal onClose={() => setBenchmarkOpen(false)} />}
+      {importOpen && <ImportModal onClose={() => setImportOpen(false)} />}
+      {nlOpen && <AiModal mode="nl" onClose={() => setNlOpen(false)} />}
     </div>
   )
 }

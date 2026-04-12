@@ -180,4 +180,9 @@ export class LocalCollectionsRepository implements CollectionsRepository {
     )
     return copy
   }
+
+  async importCollection(collection: Collection): Promise<void> {
+    const collections = readCollections()
+    writeCollections([...collections, collection])
+  }
 }

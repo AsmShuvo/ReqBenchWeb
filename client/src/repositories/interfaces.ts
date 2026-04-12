@@ -40,6 +40,8 @@ export interface CollectionsRepository {
     folderId: string | null,
     requestId: string,
   ): Promise<SavedRequest>
+
+  importCollection(collection: Collection): Promise<void>
 }
 
 // ─── Environments ────────────────────────────────────────────────────────────

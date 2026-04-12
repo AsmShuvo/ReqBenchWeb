@@ -1,22 +1,34 @@
 import { useHistoryStore } from '../store/useHistoryStore'
 import { useCollectionStore } from '../store/useCollectionStore'
 import { useEnvironmentStore } from '../store/useEnvironmentStore'
+import { useAiLimitStore, DAILY_AI_LIMIT } from '../store/useAiLimitStore'
 
 interface NavbarProps {
   onToggleHistory: () => void
   onToggleCollections: () => void
   onToggleEnvironments: () => void
+  view: 'request' | 'flow'
+  onSetView: (view: 'request' | 'flow') => void
 }
 
 export default function Navbar({
   onToggleHistory,
   onToggleCollections,
   onToggleEnvironments,
+  view,
+  onSetView,
 }: NavbarProps) {
   const historyCount = useHistoryStore((s) => s.entries.length)
   const collectionCount = useCollectionStore((s) => s.collections.length)
   const { environments, activeEnvironmentId, setActiveEnvironment } =
     useEnvironmentStore()
+  const aiRemaining = useAiLimitStore((s) => {
+    const d = new Date()
+    const todayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const used = s.date === todayKey ? s.usedToday : 0
+    return Math.max(0, DAILY_AI_LIMIT - used)
+  })
+  const aiUsed = DAILY_AI_LIMIT - aiRemaining
 
   const activeEnv = environments.find((e) => e.id === activeEnvironmentId)
 
@@ -40,6 +52,21 @@ export default function Navbar({
             </span>
           )}
         </button>
+
+        <div className="flex items-center bg-gray-800 rounded border border-gray-700 ml-2">
+          <button
+            onClick={() => onSetView('request')}
+            className={`text-xs px-3 py-1 rounded-l cursor-pointer ${view === 'request' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}
+          >
+            Request
+          </button>
+          <button
+            onClick={() => onSetView('flow')}
+            className={`text-xs px-3 py-1 rounded-r cursor-pointer ${view === 'flow' ? 'bg-gray-700 text-white' : 'text-gray-400 hover:text-white'}`}
+          >
+            Flow
+          </button>
+        </div>
       </div>
 
       <div className="flex items-center gap-2">
@@ -70,6 +97,17 @@ export default function Navbar({
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
           </button>
+        </div>
+
+        <div className="w-px h-5 bg-gray-700" />
+
+        {/* AI daily usage */}
+        <div
+          className="flex items-center gap-1.5 text-xs text-purple-300 px-2 py-1 rounded border border-purple-500/30"
+          title={`AI usage today: ${aiUsed}/${DAILY_AI_LIMIT}`}
+        >
+          <span>✨</span>
+          <span>{aiRemaining}/{DAILY_AI_LIMIT}</span>
         </div>
 
         <div className="w-px h-5 bg-gray-700" />

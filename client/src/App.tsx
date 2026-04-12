@@ -6,11 +6,15 @@ import ResponseViewer from './components/ResponseViewer'
 import HistoryPanel from './components/HistoryPanel'
 import CollectionsPanel from './components/CollectionsPanel'
 import EnvironmentManager from './components/EnvironmentManager'
+import FlowPage from './components/flow/FlowPage'
+
+type View = 'request' | 'flow'
 
 function App() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [collectionsOpen, setCollectionsOpen] = useState(false)
   const [environmentsOpen, setEnvironmentsOpen] = useState(false)
+  const [view, setView] = useState<View>('request')
 
   return (
     <div className="h-screen flex flex-col bg-gray-950 text-white">
@@ -18,16 +22,24 @@ function App() {
         onToggleHistory={() => setHistoryOpen((o) => !o)}
         onToggleCollections={() => setCollectionsOpen((o) => !o)}
         onToggleEnvironments={() => setEnvironmentsOpen((o) => !o)}
+        view={view}
+        onSetView={setView}
       />
-      <TabBar />
-      <div className="flex-1 flex overflow-hidden">
-        <div className="w-1/2 border-r border-gray-800 overflow-auto">
-          <RequestBuilder />
-        </div>
-        <div className="w-1/2 overflow-auto">
-          <ResponseViewer />
-        </div>
-      </div>
+      {view === 'request' ? (
+        <>
+          <TabBar />
+          <div className="flex-1 flex overflow-hidden">
+            <div className="w-1/2 border-r border-gray-800 overflow-auto">
+              <RequestBuilder />
+            </div>
+            <div className="w-1/2 overflow-auto">
+              <ResponseViewer />
+            </div>
+          </div>
+        </>
+      ) : (
+        <FlowPage />
+      )}
       {historyOpen && <HistoryPanel onClose={() => setHistoryOpen(false)} />}
       {collectionsOpen && <CollectionsPanel onClose={() => setCollectionsOpen(false)} />}
       {environmentsOpen && <EnvironmentManager onClose={() => setEnvironmentsOpen(false)} />}

@@ -30,6 +30,8 @@ interface CollectionStore {
   ) => void
   deleteRequest: (collectionId: string, folderId: string | null, requestId: string) => void
   duplicateRequest: (collectionId: string, folderId: string | null, requestId: string) => void
+
+  importCollection: (collection: Collection) => void
 }
 
 export const useCollectionStore = create<CollectionStore>((set, get) => ({
@@ -135,6 +137,13 @@ export const useCollectionStore = create<CollectionStore>((set, get) => ({
       }),
     }))
     collectionsRepo.deleteRequest(collectionId, folderId, requestId)
+  },
+
+  importCollection: (collection) => {
+    // Persist and add to state
+    collectionsRepo.importCollection(collection).then(() => {
+      set((state) => ({ collections: [...state.collections, collection] }))
+    })
   },
 
   duplicateRequest: (collectionId, folderId, requestId) => {
