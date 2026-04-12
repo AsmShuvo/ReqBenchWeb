@@ -4,42 +4,26 @@ import { parsePostmanCollection, type ImportSummary } from '../lib/importers/pos
 import { parseOpenApiSpec, type OpenApiImportSummary } from '../lib/importers/openApiImporter'
 import { useRequestStore } from '../store/useRequestStore'
 import { useCollectionStore } from '../store/useCollectionStore'
-<<<<<<< HEAD
-=======
 import { useToast } from '../store/useToastStore'
 import { useEscape } from '../lib/useEscape'
->>>>>>> 2894d4a (update readme)
 
 type ImportTab = 'curl' | 'postman' | 'openapi'
 
 export default function ImportModal({ onClose }: { onClose: () => void }) {
-<<<<<<< HEAD
-  const [activeTab, setActiveTab] = useState<ImportTab>('curl')
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-=======
   useEscape(onClose)
   const [activeTab, setActiveTab] = useState<ImportTab>('curl')
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
       role="dialog" aria-modal="true" aria-labelledby="import-modal-title">
->>>>>>> 2894d4a (update readme)
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
       <div className="relative bg-gray-900 border border-gray-700 rounded-lg w-full max-w-2xl max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-gray-800">
-<<<<<<< HEAD
-          <h2 className="text-lg font-semibold text-white">Import</h2>
-          <button
-            onClick={onClose}
-=======
           <h2 id="import-modal-title" className="text-lg font-semibold text-white">Import</h2>
           <button
             onClick={onClose}
             aria-label="Close dialog"
->>>>>>> 2894d4a (update readme)
             className="text-gray-400 hover:text-white text-xl cursor-pointer px-1"
           >
             &times;
@@ -175,10 +159,7 @@ function PostmanImport({ onClose }: { onClose: () => void }) {
   const [summary, setSummary] = useState<ImportSummary | null>(null)
   const [fileName, setFileName] = useState('')
   const { importCollection } = useCollectionStore()
-<<<<<<< HEAD
-=======
   const toast = useToast()
->>>>>>> 2894d4a (update readme)
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setError('')
@@ -192,10 +173,7 @@ function PostmanImport({ onClose }: { onClose: () => void }) {
       const result = parsePostmanCollection(text)
       importCollection(result.collection)
       setSummary(result.summary)
-<<<<<<< HEAD
-=======
       toast.success(`Imported ${result.summary.requestCount} request${result.summary.requestCount === 1 ? '' : 's'}`)
->>>>>>> 2894d4a (update readme)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to parse Postman collection.')
     }
@@ -247,10 +225,7 @@ function OpenApiImport({ onClose }: { onClose: () => void }) {
   const [summary, setSummary] = useState<OpenApiImportSummary | null>(null)
   const [fileName, setFileName] = useState('')
   const { importCollection } = useCollectionStore()
-<<<<<<< HEAD
-=======
   const toast = useToast()
->>>>>>> 2894d4a (update readme)
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     setError('')
@@ -264,10 +239,7 @@ function OpenApiImport({ onClose }: { onClose: () => void }) {
       const result = parseOpenApiSpec(text)
       importCollection(result.collection)
       setSummary(result.summary)
-<<<<<<< HEAD
-=======
       toast.success(`Imported ${result.summary.requestCount} endpoint${result.summary.requestCount === 1 ? '' : 's'}`)
->>>>>>> 2894d4a (update readme)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to parse OpenAPI spec.')
     }

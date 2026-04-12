@@ -4,13 +4,10 @@ import cors from 'cors'
 import { prisma } from './lib/prisma'
 import { runBenchmark } from './lib/benchmark'
 import { callGroq, groqConfigured, safeParseJson } from './lib/groq'
-<<<<<<< HEAD
-=======
 import {
   hashPassword, verifyPassword, signToken, requireAuth, isValidEmail,
 } from './lib/auth'
 import { readSnapshot, writeSnapshot, mergeSnapshots, type SyncSnapshot } from './lib/sync'
->>>>>>> 2894d4a (update readme)
 
 const app = express()
 const PORT = 3001
@@ -344,8 +341,6 @@ app.post('/api/ai/nl-to-request', async (req, res) => {
   }
 })
 
-<<<<<<< HEAD
-=======
 // ─── Auth routes ──────────────────────────────────────────────────────────
 
 app.post('/api/auth/signup', async (req, res) => {
@@ -470,7 +465,6 @@ app.post('/api/sync/merge', requireAuth, async (req, res) => {
   }
 })
 
->>>>>>> 2894d4a (update readme)
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)
 })

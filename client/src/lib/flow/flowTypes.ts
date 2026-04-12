@@ -4,14 +4,7 @@ export type FlowNodeKind = 'request' | 'delay' | 'condition'
 
 export type NodeState = 'idle' | 'running' | 'success' | 'error'
 
-<<<<<<< HEAD
-export interface RequestNodeData {
-=======
-// React Flow's Node generic requires `data extends Record<string, unknown>`.
-// We extend that so our concrete shapes satisfy the constraint without losing specificity.
-
 export interface RequestNodeData extends Record<string, unknown> {
->>>>>>> 2894d4a (update readme)
   label: string
   method: HttpMethod
   url: string
@@ -19,20 +12,12 @@ export interface RequestNodeData extends Record<string, unknown> {
   body: string
 }
 
-<<<<<<< HEAD
-export interface DelayNodeData {
-=======
 export interface DelayNodeData extends Record<string, unknown> {
->>>>>>> 2894d4a (update readme)
   label: string
   ms: number
 }
 
-<<<<<<< HEAD
-export interface ConditionNodeData {
-=======
 export interface ConditionNodeData extends Record<string, unknown> {
->>>>>>> 2894d4a (update readme)
   label: string
   expression: string // placeholder — not evaluated in V1
 }

@@ -6,10 +6,7 @@ import {
 import { useRequestStore, type KeyValuePair } from '../store/useRequestStore'
 import { useEnvironmentStore } from '../store/useEnvironmentStore'
 import { resolveString, buildVariableMap } from '../lib/resolveVariables'
-<<<<<<< HEAD
-=======
 import { useEscape } from '../lib/useEscape'
->>>>>>> 2894d4a (update readme)
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -93,14 +90,10 @@ function TimeSeriesChart({ series }: { series: BenchmarkResults['timeSeries'] })
             <Tooltip
               contentStyle={{ background: '#111827', border: '1px solid #374151', fontSize: 12 }}
               labelFormatter={(v) => `#${v}`}
-<<<<<<< HEAD
-              formatter={(value: number, _n, p) => [`${value}ms`, `Status ${p.payload.status ?? 'error'}`]}
-=======
               formatter={(value, _n, p) => {
                 const status = (p as { payload?: { status?: number | null } }).payload?.status
                 return [`${value}ms`, `Status ${status ?? 'error'}`] as [string, string]
               }}
->>>>>>> 2894d4a (update readme)
             />
             <Line type="monotone" dataKey="responseTime" stroke="#3b82f6" strokeWidth={1.5} dot={false} isAnimationActive={false} />
           </LineChart>
@@ -139,11 +132,7 @@ function HistogramChart({ results }: { results: BenchmarkResults }) {
             <YAxis stroke="#9ca3af" tick={{ fontSize: 11 }} allowDecimals={false} />
             <Tooltip
               contentStyle={{ background: '#111827', border: '1px solid #374151', fontSize: 12 }}
-<<<<<<< HEAD
-              formatter={(value: number) => [`${value} requests`, 'Count']}
-=======
               formatter={(value) => [`${value} requests`, 'Count'] as [string, string]}
->>>>>>> 2894d4a (update readme)
             />
             <Bar dataKey="count" fill="#3b82f6" isAnimationActive={false} />
           </BarChart>
@@ -169,11 +158,7 @@ function StatusChart({ breakdown }: { breakdown: Record<string, number> }) {
           <PieChart>
             <Tooltip
               contentStyle={{ background: '#111827', border: '1px solid #374151', fontSize: 12 }}
-<<<<<<< HEAD
-              formatter={(value: number, name: string) => [`${value} requests`, name]}
-=======
               formatter={(value, name) => [`${value} requests`, String(name)] as [string, string]}
->>>>>>> 2894d4a (update readme)
             />
             <Legend wrapperStyle={{ fontSize: 12, color: '#d1d5db' }} />
             <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={60} isAnimationActive={false}>
@@ -253,10 +238,7 @@ function buildResolvedRequest(
 }
 
 export default function BenchmarkModal({ onClose }: { onClose: () => void }) {
-<<<<<<< HEAD
-=======
   useEscape(onClose)
->>>>>>> 2894d4a (update readme)
   const { tabs, activeTabId } = useRequestStore()
   const { environments, activeEnvironmentId } = useEnvironmentStore()
   const tab = tabs.find((t) => t.id === activeTabId)

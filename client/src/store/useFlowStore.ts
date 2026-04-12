@@ -63,12 +63,8 @@ export const useFlowStore = create<FlowStore>()(
 
       removeNode: (id) =>
         set((state) => {
-<<<<<<< HEAD
-          const { [id]: _removed, ...rest } = state.runtime
-=======
           const rest = { ...state.runtime }
           delete rest[id]
->>>>>>> 2894d4a (update readme)
           return {
             nodes: state.nodes.filter((n) => n.id !== id),
             edges: state.edges.filter((e) => e.source !== id && e.target !== id),

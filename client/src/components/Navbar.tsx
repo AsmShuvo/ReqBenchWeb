@@ -3,13 +3,10 @@ import { useHistoryStore } from '../store/useHistoryStore'
 import { useCollectionStore } from '../store/useCollectionStore'
 import { useEnvironmentStore } from '../store/useEnvironmentStore'
 import { useAiLimitStore, DAILY_AI_LIMIT } from '../store/useAiLimitStore'
-<<<<<<< HEAD
-=======
 import { useAuthStore } from '../store/useAuthStore'
 import { logout as syncLogout } from '../lib/syncManager'
 import { useToast } from '../store/useToastStore'
 import AuthModal from './AuthModal'
->>>>>>> 2894d4a (update readme)
 
 interface NavbarProps {
   onToggleHistory: () => void
@@ -37,8 +34,6 @@ export default function Navbar({
     return Math.max(0, DAILY_AI_LIMIT - used)
   })
   const aiUsed = DAILY_AI_LIMIT - aiRemaining
-<<<<<<< HEAD
-=======
 
   const user = useAuthStore((s) => s.user)
   const toast = useToast()
@@ -50,7 +45,6 @@ export default function Navbar({
     setUserMenuOpen(false)
     toast.info('Signed out — local data preserved')
   }
->>>>>>> 2894d4a (update readme)
 
   const activeEnv = environments.find((e) => e.id === activeEnvironmentId)
 

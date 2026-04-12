@@ -7,11 +7,8 @@ import HistoryPanel from './components/HistoryPanel'
 import CollectionsPanel from './components/CollectionsPanel'
 import EnvironmentManager from './components/EnvironmentManager'
 import FlowPage from './components/flow/FlowPage'
-<<<<<<< HEAD
-=======
 import ToastContainer from './components/ToastContainer'
 import { initSyncAutoPush, pullFromServer } from './lib/syncManager'
->>>>>>> 2894d4a (update readme)
 
 type View = 'request' | 'flow'
 
@@ -20,16 +17,11 @@ function App() {
   const [collectionsOpen, setCollectionsOpen] = useState(false)
   const [environmentsOpen, setEnvironmentsOpen] = useState(false)
   const [view, setView] = useState<View>('request')
-<<<<<<< HEAD
-=======
 
   useEffect(() => {
-    // Wire auto-push to the server while signed in, and pull the latest
-    // snapshot on startup so a returning session matches the account state.
     initSyncAutoPush()
     void pullFromServer()
   }, [])
->>>>>>> 2894d4a (update readme)
 
   return (
     <div className="h-screen flex flex-col bg-gray-950 text-white">
@@ -43,19 +35,11 @@ function App() {
       {view === 'request' ? (
         <>
           <TabBar />
-<<<<<<< HEAD
-          <div className="flex-1 flex overflow-hidden">
-            <div className="w-1/2 border-r border-gray-800 overflow-auto">
-              <RequestBuilder />
-            </div>
-            <div className="w-1/2 overflow-auto">
-=======
           <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
             <div className="h-1/2 md:h-auto md:w-1/2 md:border-r border-b md:border-b-0 border-gray-800 overflow-auto">
               <RequestBuilder />
             </div>
             <div className="h-1/2 md:h-auto md:w-1/2 overflow-auto">
->>>>>>> 2894d4a (update readme)
               <ResponseViewer />
             </div>
           </div>
