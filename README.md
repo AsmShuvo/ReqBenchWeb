@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./client/public/images/logo.png" alt="ReqBench" width="100%" />
+</p>
+
 # ReqBench
 
 A modern, local-first API testing workbench — build requests, run benchmarks, visualize flows, and ship faster with AI assistance. Think "Postman meets k6 meets n8n" in a single lightweight app.
