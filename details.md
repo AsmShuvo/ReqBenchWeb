@@ -1,42 +1,31 @@
-# ReqBench — Step-by-Step Learning Guide
+# ReqBench — Code Walkthrough (বাংলায়)
 
-> You vibe-coded this. Now we're going to learn it together, one feature at a time. Each chapter explains **one** feature: why it exists, every file involved, every important line of code, and what actually happens when the user clicks a button.
->
-> **How to use this guide:** Read one chapter. Open the files it mentions. Read those files yourself. Come back. Ask for the next chapter when you're ready.
+প্রতিটি feature কিভাবে কাজ করে — file-by-file, code-by-code। তুমি vibe-coded করেছ, এখন বুঝতে যাচ্ছ। এই guide-এ আমরা একটা একটা feature ধরব। প্রথম feature থেকে শুরু।
 
 ---
 
-## Curriculum (the order we'll go)
+## Feature List (কোন order-এ পড়বে)
 
-We're going from the most basic to the most advanced. Each builds on the previous one.
-
-| # | Feature | What you'll learn |
+| # | Feature | File count |
 |---|---|---|
-| **1** | **Sending a basic HTTP request** ← *this chapter* | Frontend ↔ backend wiring, Vite proxy, Express, Zustand stores, fetch, AbortController |
-| 2 | Adding params, headers, body, and auth | Form state, KeyValuePair UI, building URLs and headers |
-| 3 | Multi-tab interface | Tab management, per-tab state |
-| 4 | Persisting state across reloads | Zustand `persist` middleware, localStorage |
-| 5 | Request history | The Repository pattern |
-| 6 | Environment variables (`{{baseUrl}}`) | Regex substitution, multi-store coordination |
-| 7 | Collections, folders, saving requests | Nested data, modals |
-| 8 | Code generation (cURL / fetch / axios / Python) | Pure-function generators, registry pattern |
-| 9 | Compare / diff two responses | JSON tree diff, LCS line diff |
-| 10 | Importers (cURL, Postman, OpenAPI) | Parsers, tokenizers, a tiny YAML reader |
-| 11 | Benchmarking | Worker pools, percentiles, server-side cancellation |
-| 12 | Visual flow builder | Graph execution, topological sort, template chaining |
-| 13 | AI assist (Groq) | LLM calls, JSON-mode prompts, client-side rate limiting |
-| 14 | Auth (signup/login/JWT) | bcrypt, JWT, Express middleware |
-| 15 | Cloud sync (Neon Postgres) | Prisma, snapshot-based sync, merge strategies |
+| **1** | **HTTP Request পাঠানো (Tabs সহ)** ← *এই chapter* | 7 files |
+| 2 | Collections (Save / Load) | 3 files |
+| 3 | Benchmark with P50/P90/P99 | 2 files |
+| 4 | Visual Flow Editor | 5 files |
+| 5 | AI Assist (Groq) | 3 files |
+| 6 | JWT Auth + Cloud Sync | 5 files |
+
+> পরের chapter চাইলে শুধু বলো **"chapter 2"**, **"chapter 3"** etc.
 
 ---
 
-# Chapter 1 — Sending a Basic HTTP Request
+# Chapter 1 — HTTP Request পাঠানো (Tabs সহ)
 
-This is the heart of the entire app. **Everything else is built on top of this.** If you understand this chapter, you understand 60% of ReqBench.
+এটাই পুরো app-এর হৃদয়। বাকি সব feature এর উপরে build করা।
 
-## 1.1 What this feature does (user-facing)
+## 1.1 এই feature কী করে?
 
-The user types a URL like `https://jsonplaceholder.typicode.com/todos/1`, picks `GET`, clicks **Send**, and a moment later sees:
+User একটা URL টাইপ করে (যেমন `https://jsonplaceholder.typicode.com/todos/1`), method select করে (`GET`/`POST` etc.), **Send** button-এ click করে। কিছুক্ষণ পর response দেখায়:
 
 ```
 Status: 200 OK     Time: 142 ms     Size: 83 B
@@ -48,74 +37,61 @@ Status: 200 OK     Time: 142 ms     Size: 83 B
 }
 ```
 
-That's it. The entire app is "this, but better." Tabs, history, env vars, collections — all UI sugar around this one operation.
+User চাইলে **একাধিক tab** খুলতে পারে — প্রতিটা tab-এ আলাদা request, আলাদা response।
 
-## 1.2 Why is this not trivial? (The hidden problem)
+---
 
-You might think: "Just call `fetch(url)` in the browser. Why do we need a backend at all?"
+## 1.2 কেন এটা সহজ না? (Browser-এর সমস্যা)
 
-The answer is **CORS** — Cross-Origin Resource Sharing. Browsers refuse to let JavaScript read responses from a server that doesn't explicitly allow it. So if your page is at `localhost:5173` and you try to `fetch('https://api.github.com/users/anyone')`, you'll get back **nothing readable** — the browser blocks it.
+তুমি ভাবতে পার: "Browser-এর JavaScript-এই `fetch(url)` call করলেই তো হয়। Backend লাগে কেন?"
 
-GitHub (and most public APIs) don't trust your laptop, so they don't add a CORS header for `localhost`. Postman and ReqBench solve this the same way: **they send the request from a real server, not from the browser**. Servers don't have CORS restrictions (CORS is a browser-only rule).
+উত্তর: **CORS** (Cross-Origin Resource Sharing)।
 
-So the architecture is:
+Browser-এর একটা security rule আছে — যদি তোমার page চলে `localhost:5173`-তে, আর তুমি `https://api.github.com` থেকে data fetch করতে চাও, GitHub-এর server বলতে হবে "হ্যাঁ, এই origin allowed।" GitHub সাধারণত `localhost`-কে allow করে না। তাই browser response **block করে দেয়** — তুমি কিছুই পাবে না।
+
+**সমাধান:** Browser request পাঠাবে **আমাদের নিজের** Express server-এ (same origin, no CORS issue)। Express server (যার CORS rule নেই) target URL fetch করবে, response browser-এ পাঠাবে।
 
 ```
-[Browser]                  [Our Express Server]              [Target URL]
+[Browser]                  [আমাদের Express server]            [Target URL]
    │                                │                              │
-   │  "Hey server, please fetch     │                              │
-   │   https://api.github.com       │                              │
-   │   and tell me what you get"    │                              │
+   │  "Server, এই URL-টা fetch     │                              │
+   │   করে বলো কী response এল"     │                              │
    ├───────────────────────────────►│                              │
    │                                │   "GET https://api.github."  │
    │                                ├─────────────────────────────►│
    │                                │                              │
    │                                │       200 + body             │
    │                                │◄─────────────────────────────┤
-   │   "Here's what GitHub said"    │                              │
+   │   "এই নাও GitHub-এর response" │                              │
    │◄───────────────────────────────┤                              │
 ```
 
-The browser only ever talks to **our** server (same origin, no CORS issue). Our server talks to anyone.
-
-This pattern is called a **proxy**.
-
-## 1.3 The data flow (zoomed in)
-
-When you click **Send** with `GET https://jsonplaceholder.typicode.com/todos/1`:
-
-1. The button's `onClick` calls a function on a Zustand store (`sendRequest`).
-2. That function calls `fetch('/api/requests/execute', { method: 'POST', body: '{...}' })` — a POST to *our own* server with the request details inside.
-3. The Vite dev server sees `/api/...` and forwards it to `http://localhost:3001` (our Express server).
-4. Express receives it, pulls out `{method, url, headers, body}`, then does its own `fetch(url, ...)` to JSONPlaceholder.
-5. Express waits for the response, reads the body, and replies to the browser with `{ status, statusText, headers, body, responseTime }`.
-6. Back in the browser, the store saves that response into state.
-7. React re-renders the `ResponseViewer` component, which now has data to show.
-
-## 1.4 The cast of characters (files involved)
-
-Just six files matter for this feature:
-
-| File | Role |
-|---|---|
-| `client/vite.config.ts` | Tells the dev server to forward `/api/*` to the backend |
-| `client/src/main.tsx` | Boots React |
-| `client/src/App.tsx` | The layout — places the URL bar on the left, the response on the right |
-| `client/src/store/useRequestStore.ts` | The brain — holds state + has the `sendRequest` function |
-| `client/src/components/RequestBuilder.tsx` | The URL bar + Send button (left half) |
-| `client/src/components/ResponseViewer.tsx` | The response display (right half) |
-| `server/src/index.ts` | The Express server with the `/api/requests/execute` route |
-
-We'll walk through each, in the order data flows.
+এই pattern-কে বলে **proxy** (মাঝামাঝি দালাল)। Browser শুধু আমাদের server-এর সাথে কথা বলে, আমাদের server পুরো internet-এর সাথে কথা বলে।
 
 ---
 
-## 1.5 File-by-file walkthrough
+## 1.3 কোন কোন file লাগবে?
 
-### 1.5.1 `client/vite.config.ts` — the dev-time proxy
+এই একটা feature-এর জন্য **৭টা file** কাজ করে:
+
+| File | কাজ |
+|---|---|
+| `client/vite.config.ts` | Vite-কে বলে `/api/*` request গুলো backend-এ পাঠাতে |
+| `client/src/main.tsx` | React boot করে |
+| `client/src/App.tsx` | Layout — কোথায় কী থাকবে |
+| `client/src/store/useRequestStore.ts` | **মূল brain** — state রাখে আর `send()` function দেয় |
+| `client/src/components/TabBar.tsx` | উপরের tab গুলো |
+| `client/src/components/RequestBuilder.tsx` | URL bar + Send button (বাঁ দিক) |
+| `client/src/components/ResponseViewer.tsx` | Response দেখানো (ডান দিক) |
+| `server/src/index.ts` | Backend-এর `/api/requests/execute` route |
+
+Data flow-এর order-এ একটা একটা করে দেখব।
+
+---
+
+## 1.4 File 1: `client/vite.config.ts` — Proxy setup
 
 ```ts
-// client/vite.config.ts
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -128,33 +104,32 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       proxy: {
-        '/api': env.VITE_SERVER_URL,  // ← THIS LINE
+        '/api': env.VITE_SERVER_URL,   // ← এই লাইনটাই magic
       },
     },
   }
 })
 ```
 
-**What's happening here:**
+**কী হচ্ছে এখানে?**
 
-- `defineConfig` is Vite's standard config function.
-- `loadEnv(mode, process.cwd(), '')` reads `.env` files from the project root. That's how `VITE_SERVER_URL` from `client/.env` becomes accessible. Your file contains:
-  ```
-  VITE_SERVER_URL=http://localhost:3001
-  ```
-- `server: { port: 5173 }` — the React app runs on port 5173.
-- `proxy: { '/api': env.VITE_SERVER_URL }` — **this is the magic.** Any request the browser makes that starts with `/api` (like `/api/requests/execute`) gets silently rewritten by Vite to `http://localhost:3001/api/requests/execute`.
+- React app চলে `localhost:5173`-এ।
+- Browser যখন `/api/requests/execute`-এ POST করে, Vite মাঝখানে interrupt করে।
+- Vite request-টা `http://localhost:3001/api/requests/execute`-এ forward করে দেয় (যেখানে Express চলছে)।
+- Browser-এর code-এ কোথাও `http://localhost:3001` লিখতে হয় না — Vite handle করে।
 
-**Why this matters:** In the browser code you'll see `fetch('/api/requests/execute', ...)`. There's no `http://localhost:3001` in the browser code at all. Vite handles that. This means when you later deploy the app, you only have to change the proxy target — your React code doesn't move a single character.
+`VITE_SERVER_URL` value আসে `client/.env` file থেকে:
+```
+VITE_SERVER_URL=http://localhost:3001
+```
 
-> **Beginner term — "proxy":** a middleman. The browser thinks it's talking to `localhost:5173`. Vite intercepts the `/api/*` calls and forwards them to `localhost:3001`. The browser never knows.
+> **নতুন শব্দ — Proxy:** মাঝখানে দাঁড়িয়ে থাকা middleman। Browser মনে করে সে `localhost:5173`-এর সাথেই কথা বলছে, কিন্তু আসলে Vite পেছনে চুপিচুপি `localhost:3001`-এ forward করছে।
 
 ---
 
-### 1.5.2 `client/src/main.tsx` — the bootloader
+## 1.5 File 2: `client/src/main.tsx` — React boot
 
-```ts
-// client/src/main.tsx
+```tsx
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
@@ -167,409 +142,538 @@ createRoot(document.getElementById('root')!).render(
 )
 ```
 
-Nothing special here — this is the standard React 19 entry point. It grabs the `<div id="root">` from `client/index.html` and renders the `App` component into it.
+`index.html` file-এ একটা `<div id="root">` আছে। এই code সেটার ভেতরে `<App />` component render করে দেয়। `StrictMode` শুধু development-এ helper — bug detect করতে সাহায্য করে।
 
-`<StrictMode>` is a development-only React feature that double-invokes effects/renders to help catch bugs. It does nothing in production.
+কিছু complex না — Vite project-এর standard entry point।
 
 ---
 
-### 1.5.3 `client/src/App.tsx` — the layout
+## 1.6 File 3: `client/src/App.tsx` — Layout
 
 ```tsx
-// client/src/App.tsx (relevant parts)
+import { useEffect, useState } from 'react'
+import Navbar from './components/Navbar'
+import TabBar from './components/TabBar'
+import RequestBuilder from './components/RequestBuilder'
+import ResponseViewer from './components/ResponseViewer'
+import CollectionsPanel from './components/CollectionsPanel'
+import FlowPage from './components/flow/FlowPage'
+import { initSyncAutoPush, pullFromServer } from './lib/syncManager'
+
+type View = 'request' | 'flow'
+
 function App() {
-  // ... several useState hooks for panels (we'll ignore them for now) ...
+  const [view, setView] = useState<View>('request')
+  const [collectionsOpen, setCollectionsOpen] = useState(false)
+
+  useEffect(() => {
+    initSyncAutoPush()
+    void pullFromServer()
+  }, [])
 
   return (
     <div className="h-screen flex flex-col bg-gray-950 text-white">
-      <Navbar /* ... */ />
+      <Navbar
+        view={view}
+        onSetView={setView}
+        onToggleCollections={() => setCollectionsOpen((o) => !o)}
+      />
       {view === 'request' ? (
         <>
           <TabBar />
           <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-            <div className="... md:w-1/2 ...">
-              <RequestBuilder />          {/* ← LEFT HALF */}
+            <div className="md:w-1/2 md:border-r border-b md:border-b-0 border-gray-800 overflow-auto">
+              <RequestBuilder />
             </div>
-            <div className="... md:w-1/2 ...">
-              <ResponseViewer />          {/* ← RIGHT HALF */}
+            <div className="md:w-1/2 overflow-auto">
+              <ResponseViewer />
             </div>
           </div>
         </>
       ) : (
         <FlowPage />
       )}
-      {/* ... other modals ... */}
+      {collectionsOpen && <CollectionsPanel onClose={() => setCollectionsOpen(false)} />}
     </div>
   )
 }
+
+export default App
 ```
 
-**The important bits:**
+**গুরুত্বপূর্ণ অংশ:**
 
-- The screen is split in half. `RequestBuilder` is on the left, `ResponseViewer` is on the right.
-- They both read from the **same Zustand store** (`useRequestStore`). They don't pass props to each other. When `RequestBuilder` updates the store, `ResponseViewer` automatically re-renders because Zustand notifies all subscribers.
-- This is the **single source of truth** pattern. There's one state object; many components read it.
+- **Layout:** উপরে `Navbar`, তারপর `TabBar`, তারপর screen-টা দুই ভাগ — বাঁ দিকে `RequestBuilder`, ডান দিকে `ResponseViewer`।
+- **`view` state:** `'request'` হলে এই split view, `'flow'` হলে FlowPage দেখায় (Chapter 4)।
+- **`useEffect`:** App load হওয়ার সাথে সাথে sync setup হয় (login করা থাকলে cloud data pull করে)। এটা Chapter 6-এ explain করব।
+- **Props দিয়ে কেউ কারো সাথে data শেয়ার করে না।** Tabs / response — সবকিছু **Zustand store**-এ থাকে। সব component সেখান থেকেই পড়ে।
 
-> **Beginner term — Zustand:** a small state management library. Think of it as a "global object" that React components can read from and write to. Updates to it trigger re-renders in components that read from it.
+> **নতুন শব্দ — Zustand:** ছোট state management library। ভাবো "global object" যেটাতে অনেক component-একসাথে read/write করতে পারে। কোনো একটা component value change করলে যে component গুলো ওই value পড়ছিল, সব auto re-render হয়।
 
 ---
 
-### 1.5.4 `client/src/store/useRequestStore.ts` — the brain
+## 1.7 File 4: `client/src/store/useRequestStore.ts` — মূল brain
 
-This is the most important file for this feature. We'll look at it in three pieces.
+এটাই সবচেয়ে important file। ভেঙে ভেঙে দেখি।
 
-#### Piece 1: What is a tab?
+### 1.7.1 Type definitions (একটা tab দেখতে কেমন?)
 
 ```ts
-// client/src/store/useRequestStore.ts (line ~13)
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+
+export interface KeyValuePair {
+  key: string
+  value: string
+  enabled: boolean    // checkbox: header use হবে কি না
+}
+
+export interface ResponseData {
+  status: number              // 200, 404 etc.
+  statusText: string          // "OK", "Not Found"
+  headers: Record<string, string>
+  body: string                // raw response body as text
+  responseTime: number        // milliseconds
+  size: number                // bytes
+}
+
 export interface RequestTab {
-  id: string
-  name: string
-  method: HttpMethod                 // 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  id: string                   // unique ID per tab
+  name: string                 // tab-এ যা দেখায়
+  method: HttpMethod
   url: string
-  params: KeyValuePair[]             // — covered in Chapter 2
-  headers: KeyValuePair[]            // — covered in Chapter 2
-  body: string                       // — covered in Chapter 2
-  authType: 'none' | 'bearer' | 'basic'  // — Chapter 2
-  authToken: string                  // — Chapter 2
-  loading: boolean                   // true while waiting for the response
-  response: ResponseData | null      // the latest response (or nothing yet)
-  responseHistory: ResponseSnapshot[]// — Chapter 9 (compare)
-  error: string | null               // error message, if any
+  headers: KeyValuePair[]
+  body: string
+  loading: boolean             // request চলছে কি না (spinner দেখাবে)
+  response: ResponseData | null
+  error: string | null
 }
 ```
 
-For Chapter 1, only these fields matter:
-- `method` and `url` — what to send.
-- `loading`, `response`, `error` — what state we're in (haven't sent yet / waiting / got a response / something broke).
+প্রতিটা tab-এর নিজস্ব data আছে — নিজের URL, নিজের response, নিজের loading state। তাই tab change করলে সেই tab-এর response দেখায়।
 
-The other fields exist but we'll fill them in later chapters.
-
-#### Piece 2: The store and `sendRequest`
+### 1.7.2 Store-এর shape
 
 ```ts
-// client/src/store/useRequestStore.ts (line ~97)
-export const useRequestStore = create<RequestStore>()(
+interface RequestState {
+  tabs: RequestTab[]          // সব open tabs
+  activeTabId: string         // এই মুহূর্তে কোনটা active
+
+  addTab: () => void
+  removeTab: (id: string) => void
+  setActiveTab: (id: string) => void
+  updateTab: (id: string, patch: Partial<RequestTab>) => void
+  loadRequest: (r: {...}) => void
+  send: (id: string) => Promise<void>
+}
+```
+
+**State** = `tabs` array + কোন tab active।
+**Actions** = state কে modify করার functions।
+
+### 1.7.3 Helper functions
+
+```ts
+function createBlankTab(): RequestTab {
+  return {
+    id: crypto.randomUUID(),     // random unique ID
+    name: 'New Request',
+    method: 'GET',
+    url: '',
+    headers: [{ key: '', value: '', enabled: true }],
+    body: '',
+    loading: false,
+    response: null,
+    error: null,
+  }
+}
+
+function deriveName(url: string): string {
+  if (!url.trim()) return 'New Request'
+  try {
+    const u = new URL(url)
+    return u.host + (u.pathname === '/' ? '' : u.pathname)
+  } catch {
+    return url.length > 30 ? url.slice(0, 30) + '...' : url
+  }
+}
+
+function buildHeaders(pairs: KeyValuePair[]): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const p of pairs) if (p.enabled && p.key) out[p.key] = p.value
+  return out
+}
+```
+
+- **`createBlankTab`** — একটা নতুন খালি tab বানায়।
+- **`deriveName`** — URL দেখে tab-এর জন্য একটা ছোট নাম বানায় (যেমন `api.github.com/user`)।
+- **`buildHeaders`** — KeyValuePair array থেকে enabled গুলো নিয়ে `{Key: Value}` object বানায় (যেটা fetch-এ পাঠানো যায়)।
+
+### 1.7.4 Store create করা
+
+```ts
+const initialTab = createBlankTab()
+
+export const useRequestStore = create<RequestState>()(
   persist(
     (set, get) => ({
-      tabs: [defaultTab],
-      activeTabId: defaultTab.id,
-      // ... addTab, removeTab, updateTab, etc. — Chapter 3 ...
+      tabs: [initialTab],
+      activeTabId: initialTab.id,
 
-      sendRequest: async (id) => {
-        const tab = get().tabs.find((t) => t.id === id)
-        if (!tab || !tab.url.trim()) return
-        // ... env var resolution ... (Chapter 6) ...
-
-        // (1) Flip the tab into "loading" state — the UI shows a spinner.
-        set((state) => ({
-          tabs: state.tabs.map((t) =>
-            t.id === id ? { ...t, loading: true, response: null, error: null } : t,
-          ),
-        }))
-
-        try {
-          // (2) Build the final URL (Chapter 2 explains the helper) and headers.
-          const fullUrl = buildUrl(resolvedUrl, resolvedParams)
-          const headers = buildHeaders(resolvedHeaders, tab.authType, resolvedAuthToken)
-
-          // (3) Send a POST to our OWN backend, asking it to execute the request.
-          const res = await fetch('/api/requests/execute', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              method: tab.method,
-              url: fullUrl,
-              headers,
-              body: tab.method !== 'GET' && tab.method !== 'DELETE' ? resolvedBody : undefined,
-            }),
-          })
-
-          // (4) Read the JSON the server sent back.
-          const data = await res.json()
-
-          if (data.error) {
-            // The server told us something went wrong (bad URL, timeout, etc.)
-            set((state) => ({
-              tabs: state.tabs.map((t) =>
-                t.id === id ? { ...t, loading: false, error: data.error } : t,
-              ),
-            }))
-            // ... save to history ... (Chapter 5)
-            return
-          }
-
-          // (5) Build the response object the UI will show.
-          const responseData: ResponseData = {
-            status: data.status,
-            statusText: data.statusText,
-            headers: data.headers,
-            body: data.body,
-            responseTime: data.responseTime,
-            size: new Blob([data.body]).size,  // ← measure body size in bytes
-          }
-
-          // ... snapshot logic for Compare feature — Chapter 9 ...
-
-          // (6) Save the response into the store. The ResponseViewer will re-render.
-          set((state) => ({
-            tabs: state.tabs.map((t) =>
-              t.id === id ? { ...t, loading: false, response: responseData, /*...*/ } : t,
-            ),
-          }))
-
-          // ... save to history ... (Chapter 5)
-        } catch {
-          // (7) Network error reaching OUR backend (server is down, etc.)
-          set((state) => ({
-            tabs: state.tabs.map((t) =>
-              t.id === id ? { ...t, loading: false, error: 'Failed to reach backend server' } : t,
-            ),
-          }))
-        }
-      },
+      // ... actions here
     }),
-    // ... persist config — Chapter 4 ...
+    {
+      name: 'reqbench-tabs',          // localStorage key
+      partialize: (s) => ({
+        // page reload হলে loading/error/response save করি না
+        // শুধু form fields save করি
+        tabs: s.tabs.map((t) => ({ ...t, loading: false, error: null, response: null })),
+        activeTabId: s.activeTabId,
+      }),
+    },
   ),
 )
 ```
 
-**Walking through it step by step:**
+- **`persist` middleware:** Zustand-এর built-in feature। যে data save করবে তা automatically `localStorage`-এ চলে যায়। Page reload করলেও tab গুলো থাকে।
+- **`partialize`:** কোন কোন field save হবে সেটা control করে। আমরা `loading`, `error`, `response` save করি না কারণ ওগুলো request চলার সময়কার temporary state — reload-এর পর পুরোনো spinner দেখানোর মানে নেই।
 
-1. **Mark the tab as loading.** Setting `loading: true` causes the Send button to show a spinner and the ResponseViewer to display "loading". Setting `response: null` clears any previous response.
-2. **Build the request.** For now ignore `buildUrl` and `buildHeaders` — they're for Chapter 2. With just a URL and no params/headers, `fullUrl === tab.url` and `headers === {}`.
-3. **POST to our own server.** Notice the path is `/api/requests/execute`, *not* the target URL. We're asking our Express server to do the actual fetch.
-   - `headers: { 'Content-Type': 'application/json' }` tells our server that the body is JSON.
-   - `body: JSON.stringify(...)` packages the request details into a string.
-   - For GET and DELETE we leave `body: undefined` because HTTP says those methods shouldn't have a body.
-4. **Wait for the response and parse it as JSON.** `await res.json()` reads the response body and parses it.
-5. **Wrap the result in a clean object.** `new Blob([data.body]).size` is a clever trick to count the byte size of a string — Blob is a built-in browser API, and `.size` gives you the byte count.
-6. **Save it into the store.** Setting `loading: false` and `response: responseData` flips the UI. `ResponseViewer` will re-render automatically.
-7. **Catch errors.** This `catch` block only fires if the browser couldn't even *reach* our server (e.g. server is offline). Errors from the *target URL* (timeouts, bad responses) come back in step 4 as `data.error`.
-
-> **Beginner term — `async`/`await`:** a way to write code that has to wait for slow things (like network calls) without freezing the browser. `await fetch(...)` says "pause here until the network call finishes, then continue." The function must be marked `async` for `await` to work.
-
-> **Beginner term — `set` and `get`:** Zustand gives the store two helpers. `set(updater)` replaces some state. `get()` reads the current state. Both are needed inside actions like `sendRequest`.
-
-#### Piece 3: Why `set` looks so weird
-
-You'll see this pattern over and over:
+### 1.7.5 Actions (state change করার function)
 
 ```ts
-set((state) => ({
-  tabs: state.tabs.map((t) =>
-    t.id === id ? { ...t, loading: true } : t,
-  ),
-}))
+addTab: () => {
+  const tab = createBlankTab()
+  set((s) => ({ tabs: [...s.tabs, tab], activeTabId: tab.id }))
+},
 ```
 
-This is **immutable update**. React (and Zustand) decides whether to re-render by comparing references. So instead of mutating the array (`state.tabs[0].loading = true`), we:
+নতুন tab বানিয়ে list-এ যোগ করো, সেটাকেই active বানাও।
 
-1. Build a new `tabs` array with `.map(...)`.
-2. For the tab that matches, create a new object `{ ...t, loading: true }` (spread the old fields, then overwrite `loading`).
-3. Pass the new state object to `set`.
+```ts
+removeTab: (id) =>
+  set((s) => {
+    if (s.tabs.length === 1) return s    // অন্তত একটা tab রাখতে হবে
+    const idx = s.tabs.findIndex((t) => t.id === id)
+    const filtered = s.tabs.filter((t) => t.id !== id)
+    const activeTabId = s.activeTabId === id
+      ? filtered[Math.min(idx, filtered.length - 1)].id
+      : s.activeTabId
+    return { tabs: filtered, activeTabId }
+  }),
+```
 
-Result: React sees a new `tabs` reference, knows something changed, and re-renders.
+Tab delete হলে — যদি সেটাই active ছিল, তাহলে next tab-কে active বানাও।
+
+```ts
+updateTab: (id, patch) =>
+  set((s) => ({
+    tabs: s.tabs.map((t) => {
+      if (t.id !== id) return t
+      const updated = { ...t, ...patch }
+      if ('url' in patch) updated.name = deriveName(updated.url)
+      return updated
+    }),
+  })),
+```
+
+কোনো একটা tab-এর field গুলো update করে। যদি URL change হয়, tab-এর name-ও update করে দেয়।
+
+### 1.7.6 সবচেয়ে important: `send` function
+
+```ts
+send: async (id) => {
+  const tab = get().tabs.find((t) => t.id === id)
+  if (!tab || !tab.url.trim()) return
+
+  // (1) Loading শুরু — UI spinner দেখাবে
+  get().updateTab(id, { loading: true, response: null, error: null })
+
+  try {
+    // (2) আমাদের নিজের backend-এ POST করি
+    const res = await fetch('/api/requests/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        method: tab.method,
+        url: tab.url,
+        headers: buildHeaders(tab.headers),
+        body: tab.method !== 'GET' && tab.method !== 'DELETE' ? tab.body : undefined,
+      }),
+    })
+    const data = await res.json()
+
+    // (3) Backend-এর কাছে error হলে দেখাও
+    if (data.error) {
+      get().updateTab(id, { loading: false, error: data.error })
+      return
+    }
+
+    // (4) Success — response save করি
+    get().updateTab(id, {
+      loading: false,
+      response: {
+        status: data.status,
+        statusText: data.statusText,
+        headers: data.headers,
+        body: data.body,
+        responseTime: data.responseTime,
+        size: new Blob([data.body]).size,    // byte size মাপি
+      },
+    })
+  } catch {
+    // (5) Network error (backend reach করা যাচ্ছে না)
+    get().updateTab(id, { loading: false, error: 'Failed to reach backend server' })
+  }
+},
+```
+
+**Step-by-step ব্যাখ্যা:**
+
+1. **Loading flag on করি।** এর ফলে UI-তে Send button-এ spinner ঘুরে।
+2. **আমাদের নিজের backend-এ POST করি** `/api/requests/execute`-এ। লক্ষ্য করো — এখানে target URL-এ direct call করছি না, আমাদের server-কে বলছি "তুমি call করো"। GET / DELETE method-এ body পাঠাই না (HTTP-এর rule)।
+3. **Backend যদি error দেয়** (যেমন invalid URL, timeout) — error message UI-তে দেখাই।
+4. **Success হলে** — response data store করি। `new Blob([body]).size` দিয়ে byte size মাপি (এটা browser-এর built-in trick)।
+5. **`catch` block** শুধু তখনই trigger হবে যদি আমাদের backend-ই reach করা না যায় (server বন্ধ, network down etc.)। Target API-র error backend-এ handle হয়, এখানে না।
+
+> **নতুন শব্দ — `async`/`await`:** Network call slow। `await fetch(...)` মানে "এখানে wait করো যতক্ষণ না response আসে, তারপর continue করো"। Function-এ `async` keyword থাকতে হবে `await` use করার জন্য।
+
+> **নতুন শব্দ — `set` / `get`:** Zustand-এর দুটো helper। `set(updater)` state update করে। `get()` current state পড়ে। দুটোই action-এর ভেতরে access করা যায়।
 
 ---
 
-### 1.5.5 `client/src/components/RequestBuilder.tsx` — the URL bar
-
-This file is ~300 lines because it also handles params, headers, body, auth, and several modal buttons. For Chapter 1 we only care about the URL bar and the Send button.
+## 1.8 File 5: `client/src/components/TabBar.tsx` — Tab UI
 
 ```tsx
-// client/src/components/RequestBuilder.tsx (simplified)
-export default function RequestBuilder() {
-  const { tabs, activeTabId, updateTab, sendRequest } = useRequestStore()
-  const tab = tabs.find((t) => t.id === activeTabId)
-  if (!tab) return null
+import { useRequestStore } from '../store/useRequestStore'
+
+const methodColor: Record<string, string> = {
+  GET: 'text-green-400', POST: 'text-yellow-400', PUT: 'text-blue-400',
+  PATCH: 'text-purple-400', DELETE: 'text-red-400',
+}
+
+export default function TabBar() {
+  const { tabs, activeTabId, setActiveTab, addTab, removeTab } = useRequestStore()
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-800">
-        {/* Method dropdown */}
-        <select
-          value={tab.method}
-          onChange={(e) => updateTab(tab.id, { method: e.target.value as HttpMethod })}
+    <div className="h-10 bg-gray-900 border-b border-gray-800 flex items-center overflow-x-auto">
+      {tabs.map((tab) => (
+        <div
+          key={tab.id}
+          onClick={() => setActiveTab(tab.id)}
+          className={`group h-full px-3 text-sm flex items-center gap-1.5 ... cursor-pointer ${
+            activeTabId === tab.id
+              ? 'bg-gray-800 text-white'
+              : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
+          }`}
         >
-          {['GET','POST','PUT','PATCH','DELETE'].map((m) => (
-            <option key={m} value={m}>{m}</option>
-          ))}
-        </select>
-
-        {/* URL bar */}
-        <input
-          type="text"
-          placeholder="Enter URL..."
-          value={tab.url}
-          onChange={(e) => updateTab(tab.id, { url: e.target.value })}
-        />
-
-        {/* Send button */}
-        <button
-          onClick={() => sendRequest(tab.id)}
-          disabled={tab.loading}
-        >
-          {tab.loading ? <Spinner /> : 'Send'}
-        </button>
-      </div>
-      {/* ... Params / Headers / Body / Auth tabs — Chapter 2 ... */}
+          <span className={`text-xs font-semibold ${methodColor[tab.method]}`}>
+            {tab.method}
+          </span>
+          <span className="truncate max-w-36">{tab.name}</span>
+          {tabs.length > 1 && (
+            <span
+              onClick={(e) => { e.stopPropagation(); removeTab(tab.id) }}
+              className="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 ml-1"
+            >
+              ×
+            </span>
+          )}
+        </div>
+      ))}
+      <button onClick={addTab} className="h-full px-3 text-gray-500 hover:text-white text-lg">
+        +
+      </button>
     </div>
   )
 }
 ```
 
-**How the data flows in and out:**
+**গুরুত্বপূর্ণ বিষয়:**
 
-- **Read:** `const { tabs, activeTabId, ... } = useRequestStore()` subscribes the component to the store. Whenever the store changes, this component re-renders.
-- **Find the active tab:** `tab = tabs.find(...)`. For Chapter 1 there's only one tab, so it's just `tabs[0]`.
-- **Display the current method/URL:** `<select value={tab.method}>` and `<input value={tab.url}>` are *controlled inputs* — what shows in the box is whatever's in the store.
-- **Write on change:** When the user types, `onChange` fires `updateTab(tab.id, { url: e.target.value })`. That mutates the store. The component re-renders with the new value.
-- **Send:** `onClick={() => sendRequest(tab.id)}` calls the action we just walked through.
+- **`useRequestStore()`** — store-এ subscribe করে। Store change হলেই component re-render হয়।
+- **`tabs.map(...)`** — প্রতিটা tab-এর জন্য একটা box রেন্ডার করে।
+- **Active tab differently styled** — background dark, text white।
+- **`stopPropagation()`** — close button click করলে parent div-এর `onClick` (যেটা tab activate করত) trigger হয় না।
+- **`+` button** নতুন tab বানায়।
 
-There's also a Ctrl+Enter keyboard shortcut:
+---
+
+## 1.9 File 6: `client/src/components/RequestBuilder.tsx` — URL bar
+
+Pure code-এর কিছু part দেখি (পুরো file-এ আরো ছোটখাটো জিনিস আছে যেমন Save button, Body tab — সেগুলো অন্য feature-এর):
+
+### 1.9.1 Active tab কিভাবে পড়ি
+
+```tsx
+export default function RequestBuilder() {
+  const tabs = useRequestStore((s) => s.tabs)
+  const activeTabId = useRequestStore((s) => s.activeTabId)
+  const updateTab = useRequestStore((s) => s.updateTab)
+  const send = useRequestStore((s) => s.send)
+  const tab = tabs.find((t) => t.id === activeTabId)!
+  // ...
+}
+```
+
+Store থেকে শুধু যা দরকার সেগুলো নিই, তারপর `find` দিয়ে active tab-টা বের করি। `tab` এ এই মুহূর্তে যে tab user দেখছে তার সব data আছে।
+
+### 1.9.2 URL bar UI
+
+```tsx
+<div className="flex items-center gap-2 p-3 border-b border-gray-800">
+  {/* Method dropdown */}
+  <select
+    value={tab.method}
+    onChange={(e) => updateTab(tab.id, { method: e.target.value as HttpMethod })}
+    className={`bg-gray-800 ... ${methodColor[tab.method]}`}
+  >
+    {methods.map((m) => <option key={m} value={m}>{m}</option>)}
+  </select>
+
+  {/* URL input */}
+  <input
+    type="text"
+    placeholder="Enter URL..."
+    value={tab.url}
+    onChange={(e) => updateTab(tab.id, { url: e.target.value })}
+    className="flex-1 bg-gray-800 ..."
+  />
+
+  {/* Send button */}
+  <button
+    onClick={() => void send(tab.id)}
+    disabled={tab.loading}
+    className="bg-blue-600 hover:bg-blue-500 ..."
+  >
+    {tab.loading ? <Spinner /> : 'Send'}
+  </button>
+</div>
+```
+
+**গুরুত্বপূর্ণ pattern — Controlled input:**
+
+- Input-এর `value` আসে store থেকে (`tab.url`)।
+- User type করলে `onChange` fire হয় → `updateTab(tab.id, { url: e.target.value })` call হয় → store update হয় → component re-render হয় → input-এ নতুন value দেখায়।
+
+Browser-এর DOM-এ data রাখি না। সব **single source of truth** — store।
+
+### 1.9.3 Ctrl+Enter keyboard shortcut
 
 ```tsx
 useEffect(() => {
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+  const handler = (e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !tab.loading) {
       e.preventDefault()
-      if (tab && !tab.loading) sendRequest(tab.id)
+      void send(tab.id)
     }
   }
-  window.addEventListener('keydown', handleKeyDown)
-  return () => window.removeEventListener('keydown', handleKeyDown)
-}, [tab, sendRequest])
+  window.addEventListener('keydown', handler)
+  return () => window.removeEventListener('keydown', handler)
+}, [send, tab.id, tab.loading])
 ```
 
-`useEffect` runs after render. It attaches a global keyboard listener. The `return () => ...` is a *cleanup function* — when the component unmounts (or the effect re-runs because `tab` changed), React removes the old listener. Without that cleanup you'd leak listeners every render.
-
-> **Beginner term — "controlled input":** an input whose displayed value is set by React state, not by the DOM. The opposite is "uncontrolled," where you only read the value when needed. Controlled is the norm in React.
+`useEffect`-এ keyboard listener attach করি। `return () => ...` cleanup function — component unmount হলে listener remove হয়। এটা না করলে memory leak হবে।
 
 ---
 
-### 1.5.6 `client/src/components/ResponseViewer.tsx` — showing the response
+## 1.10 File 7: `client/src/components/ResponseViewer.tsx` — Response দেখানো
 
 ```tsx
-// client/src/components/ResponseViewer.tsx (simplified)
 export default function ResponseViewer() {
-  const { tabs, activeTabId } = useRequestStore()
-  const tab = tabs.find((t) => t.id === activeTabId)
-  const response = tab?.response
-  const error = tab?.error
-  const loading = tab?.loading
-
-  return (
-    <div className="flex flex-col h-full">
-      {/* Status / time / size bar */}
-      <div className="flex items-center gap-4 p-3 border-b border-gray-800">
-        {response ? (
-          <>
-            <span className={statusColor(response.status)}>
-              {response.status} {response.statusText}
-            </span>
-            <span className="text-green-400">{response.responseTime} ms</span>
-            <span>{formatSize(response.size)}</span>
-          </>
-        ) : (
-          <span className="text-gray-400">---</span>
-        )}
-      </div>
-
-      {/* Body */}
-      <div className="flex-1 overflow-auto p-3">
-        {loading && <Spinner />}
-        {!loading && error && <div className="text-red-400">{error}</div>}
-        {!loading && !error && !response && (
-          <p className="text-gray-500">Send a request to see the response</p>
-        )}
-        {!loading && !error && response && (
-          <pre className="text-sm text-gray-300 font-mono">
-            {formatBody(response.body)}
-          </pre>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function formatBody(body: string): string {
-  try {
-    return JSON.stringify(JSON.parse(body), null, 2)   // pretty-print JSON
-  } catch {
-    return body                                         // not JSON? show as-is
-  }
+  const tabs = useRequestStore((s) => s.tabs)
+  const activeTabId = useRequestStore((s) => s.activeTabId)
+  const tab = tabs.find((t) => t.id === activeTabId)!
+  const { response, error, loading } = tab
+  // ...
 }
 ```
 
-**The reading pattern is identical** to the RequestBuilder: subscribe to the store, find the active tab, read its `response`/`error`/`loading`, render UI based on which one is set.
+RequestBuilder-এর মতোই active tab পড়ে। কিন্তু এখানে শুধু **read** করি — write করি না।
 
-**Three visual states:**
+```tsx
+{loading && <Spinner />}
 
-1. `loading` → show a spinning circle.
-2. `error` → show a red box with the error message.
-3. `response` → show the status code, time, size, and body.
+{!loading && error && (
+  <div className="text-red-400">{error}</div>
+)}
 
-**`formatBody` is a nice touch.** Many APIs return JSON, so we try to `JSON.parse` the body and re-stringify it with `null, 2` for indentation. If parsing fails (HTML, plain text, etc.), we show the raw body.
+{!loading && !error && !response && (
+  <p className="text-gray-500">Send a request to see the response</p>
+)}
 
-**`statusColor` color-codes status codes:** green for 2xx, yellow for 3xx, red for 4xx/5xx. Tiny detail but very effective UX.
+{!loading && !error && response && (
+  <pre className="text-sm text-gray-300 font-mono">
+    {formatBody(response.body)}
+  </pre>
+)}
+```
+
+চারটা possible state:
+1. **Loading** — spinner ঘুরছে।
+2. **Error** — red box-এ error message।
+3. **No response yet** — "Send a request to see..." message।
+4. **Response আছে** — body দেখাও।
+
+```tsx
+function formatBody(body: string): string {
+  try { return JSON.stringify(JSON.parse(body), null, 2) }
+  catch { return body }
+}
+```
+
+JSON হলে pretty-print করি (২ space indent), না হলে raw string দেখাই।
+
+```tsx
+function statusColor(status: number): string {
+  if (status < 300) return 'text-green-400'    // 2xx success
+  if (status < 400) return 'text-yellow-400'   // 3xx redirect
+  return 'text-red-400'                         // 4xx/5xx error
+}
+```
+
+Status code-এর color — সবুজ মানে ভালো, লাল মানে error।
 
 ---
 
-### 1.5.7 `server/src/index.ts` — the Express endpoint
-
-Now we're on the backend. The relevant route is `POST /api/requests/execute`:
+## 1.11 File 8: `server/src/index.ts` — Backend route
 
 ```ts
-// server/src/index.ts (lines ~32–90)
 app.post('/api/requests/execute', async (req, res) => {
   const { method, url, headers, body } = req.body
 
-  // (A) Validate inputs
+  // (A) Validate
   if (!url || !method) {
     res.status(400).json({ error: 'method and url are required' })
     return
   }
-
-  try {
-    new URL(url)   // throws if the URL is malformed
-  } catch {
+  try { new URL(url) } catch {
     res.status(400).json({ error: 'Invalid URL' })
     return
   }
 
-  // (B) Set up a 30-second timeout
+  // (B) 30 second timeout setup
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 30000)
 
   try {
     const start = performance.now()
 
-    // (C) Build the options for the real fetch
-    const fetchOptions: RequestInit = {
+    // (C) Target URL-এ আসল request পাঠাই
+    const response = await fetch(url, {
       method,
       headers: headers || {},
+      body: body && method !== 'GET' && method !== 'HEAD' ? body : undefined,
       signal: controller.signal,
-    }
-
-    if (body && method !== 'GET' && method !== 'HEAD') {
-      fetchOptions.body = typeof body === 'string' ? body : JSON.stringify(body)
-    }
-
-    // (D) Actually fetch the target URL
-    const response = await fetch(url, fetchOptions)
+    })
     const responseTime = Math.round(performance.now() - start)
 
-    // (E) Convert response headers (an iterable) into a plain object
+    // (D) Response headers convert করি
     const responseHeaders: Record<string, string> = {}
-    response.headers.forEach((value, key) => {
-      responseHeaders[key] = value
-    })
+    response.headers.forEach((value, key) => { responseHeaders[key] = value })
 
-    // (F) Read the body as text (works for JSON, HTML, anything)
+    // (E) Body text হিসেবে পড়ি
     const responseBody = await response.text()
 
-    // (G) Send everything back to the browser
+    // (F) Browser-কে সব ফেরত পাঠাই
     res.json({
       status: response.status,
       statusText: response.statusText,
@@ -577,7 +681,7 @@ app.post('/api/requests/execute', async (req, res) => {
       body: responseBody,
       responseTime,
     })
-  } catch (err: unknown) {
+  } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
       res.status(408).json({ error: 'Request timed out (30s)' })
       return
@@ -592,120 +696,125 @@ app.post('/api/requests/execute', async (req, res) => {
 
 **Step-by-step:**
 
-- **(A) Validate.** Without a URL or method we can't do anything, so respond with a `400 Bad Request`. `new URL(url)` is a built-in JavaScript constructor that throws if the string isn't a valid URL — a one-line validator.
+- **(A) Validate:** URL আর method আছে কিনা check। `new URL(url)` invalid URL হলে throw করে — সেটা catch করে 400 দিই।
 
-- **(B) Timeout.** Public APIs can hang. `AbortController` is the modern way to cancel a `fetch`. We create one, set a 30-second timer that calls `controller.abort()`, and pass its `signal` to fetch. If the timer fires before fetch finishes, fetch throws an `AbortError` which we catch below.
+- **(B) 30 second timeout:** কিছু API hang করে থাকতে পারে। `AbortController` দিয়ে modern browsers/Node-এ fetch cancel করা যায়। 30 second পর timer fire হলে fetch automatically abort হয়।
 
-- **(C) Build fetch options.** Copy method, headers, and the abort signal. Skip the body for GET/HEAD (HTTP doesn't allow bodies for those).
+- **(C) আসল fetch:** এটাই সেই moment যখন আমাদের server target URL-এ call করে। `performance.now()` দিয়ে সময় মাপি — start time আর end time-এর difference = response time।
 
-- **(D) Fetch.** This is the actual outgoing request to the target URL (JSONPlaceholder, GitHub, whatever). `performance.now()` is a high-resolution timestamp; we use it before and after to measure how long the request took.
+- **(D) Headers conversion:** `response.headers` একটা special `Headers` object, plain `{}` না। তাই `.forEach` দিয়ে regular object বানাই — যাতে JSON-এ serialize করা যায়।
 
-- **(E) Header conversion.** `response.headers` is a `Headers` object (a built-in browser/Node thing). It's iterable but not a plain object, so we `.forEach` it into a regular `{ key: value }` map that can be JSON-serialized.
+- **(E) Body text হিসেবে পড়ি:** `.text()` যেকোনো content type-এর জন্য কাজ করে (JSON, HTML, XML, plain text)। JSON হলে browser-এই pretty-print করব।
 
-- **(F) Read the body as text.** `.text()` always works regardless of content type. If it's JSON, the browser will parse it on the other end (or we'll pretty-print it).
+- **(F) Response পাঠাই:** Browser যা চাইছিল সব এক object-এ।
 
-- **(G) Reply.** `res.json(...)` sends a JSON response back to the browser. The browser's `await res.json()` in the store gets exactly this object.
+- **Error handling:**
+  - `AbortError` = timeout হয়েছিল → 408 ("Request Timeout") status।
+  - অন্য error (DNS fail, connection refused) → 502 ("Bad Gateway")।
 
-- **Error handling.** Two flavors:
-  - `AbortError` → the 30-second timer fired. Reply with `408 Request Timeout`.
-  - Anything else (DNS failure, connection refused, etc.) → `502 Bad Gateway`. The actual error message gets passed through so the user can see what happened.
+- **`finally`:** Success হোক বা fail, timer clear করা — না হলে memory leak।
 
-- **`finally` block** → always clear the timer, even if everything worked, to avoid leaks.
+> **নতুন শব্দ — `AbortController`:** চলমান কোনো fetch cancel করার আধুনিক way। তুমি একটা controller বানাও, তার `signal` fetch-এ দাও, তারপর যেকোনো সময় `.abort()` call করলে fetch থেমে যায়।
 
-> **Beginner term — `AbortController`:** a way to cancel an in-flight `fetch`. You create one, hand its `signal` to fetch, and call `.abort()` whenever you want to cancel.
-
-> **Beginner term — HTTP status codes used here:** `400` = the client sent bad data. `408` = took too long. `502` = the upstream service (the URL the user gave us) didn't respond properly.
+> **HTTP status codes ব্যবহৃত:**
+> - `400` = client খারাপ data পাঠিয়েছে
+> - `408` = অনেক বেশি সময় লেগেছে
+> - `502` = upstream server (যে URL user দিয়েছিল) response দেয়নি
 
 ---
 
-## 1.6 What happens when you click Send (the complete trace)
+## 1.12 সম্পূর্ণ flow — Send button click করলে কী হয়
 
-Putting it all together. The user types `https://jsonplaceholder.typicode.com/todos/1`, leaves method on `GET`, clicks **Send**.
+User টাইপ করে `https://jsonplaceholder.typicode.com/todos/1`, **Send** click করে। এই ১১টা step হয়:
 
-| # | Where | What happens |
+| # | কোথায় | কী হচ্ছে |
 |---|---|---|
-| 1 | RequestBuilder.tsx | `onClick` fires → `sendRequest(tab.id)` |
-| 2 | useRequestStore.ts | `set` flips the tab to `{ loading: true, response: null, error: null }` |
-| 3 | ResponseViewer.tsx | Re-renders, shows a spinner |
-| 4 | useRequestStore.ts | `fetch('/api/requests/execute', { method: 'POST', body: '{"method":"GET","url":"https://...","headers":{}}' })` |
-| 5 | Vite | Sees `/api/...`, forwards to `http://localhost:3001/api/requests/execute` |
-| 6 | Express (index.ts) | Route handler runs. Validates URL. Starts the 30 s timer. |
-| 7 | Express | `await fetch('https://jsonplaceholder.typicode.com/todos/1', { method: 'GET', headers: {}, signal })` |
-| 8 | JSONPlaceholder | Returns `200 OK` with a JSON body |
-| 9 | Express | Records the elapsed time, converts headers to a plain object, reads the body, sends `{status, statusText, headers, body, responseTime}` back |
-| 10 | useRequestStore.ts | `await res.json()` parses the reply. Computes byte size. `set` updates the tab with `{ loading: false, response: {...} }` |
-| 11 | ResponseViewer.tsx | Re-renders. Shows `200 OK · 142 ms · 83 B` and the pretty-printed JSON body |
+| 1 | `RequestBuilder.tsx` | Button-এর `onClick` → `send(tab.id)` |
+| 2 | `useRequestStore.ts` | `updateTab` করে tab-কে `loading: true` করি |
+| 3 | `ResponseViewer.tsx` | Re-render হয়, spinner দেখায় |
+| 4 | `useRequestStore.ts` | `fetch('/api/requests/execute', { method: 'POST', body: '{method,url,headers,body}' })` |
+| 5 | Vite | `/api/...` দেখে `http://localhost:3001`-এ forward করে |
+| 6 | `server/src/index.ts` | URL validate করে, 30s timer set করে |
+| 7 | Express | `fetch('https://jsonplaceholder.typicode.com/todos/1', ...)` — target-এ আসল call |
+| 8 | JSONPlaceholder | `200 OK` + JSON body return করে |
+| 9 | Express | Time মাপে, headers convert করে, body read করে, browser-এ পাঠায় |
+| 10 | `useRequestStore.ts` | Response পেয়ে byte size মাপে, tab-এ save করে |
+| 11 | `ResponseViewer.tsx` | Re-render হয়, status + time + body দেখায় |
 
-Total: ~150 ms typically, depending on the target URL.
-
----
-
-## 1.7 Things to know / gotchas
-
-- **The backend MUST be running.** If `npm run dev` isn't going in the `server/` folder, every Send will fail with "Failed to reach backend server." That's the `catch` block in `sendRequest`.
-- **Both halves read the same store.** RequestBuilder writes (`updateTab`, `sendRequest`); ResponseViewer reads (`tab.response`). They never talk to each other directly. The store is the only shared memory.
-- **The 30-second timeout is enforced on the server, not the browser.** If the target API is slow, you'll get a `408` after 30 seconds, not a hung tab.
-- **Status codes ≥ 400 are not errors here.** A `404 Not Found` from the target API is a *successful* response from our server's perspective — we got back what the target said. The `error` field is only used when our server couldn't reach the target at all (timeout, DNS, etc.) or when the user typed an invalid URL.
-- **Body size is calculated in the browser, not the server.** `new Blob([data.body]).size` is a browser-only API. The server doesn't compute it.
-- **There's a real bug in `.env` naming.** `server/.env.example` says `DB_URL` but `server/src/lib/prisma.ts` reads `process.env.DATABASE_URL`. This doesn't affect Chapter 1 (the execute route doesn't touch the DB), but it'll bite you in Chapter 15. Worth knowing now.
+মোট সময়: সাধারণত ~150ms (target API-র উপর নির্ভর)।
 
 ---
 
-## 1.8 Try it yourself — small experiments
+## 1.13 মনে রাখার মতো কিছু কথা
 
-These will help cement the mental model. Open DevTools (F12) in the browser before doing them.
+- **Backend না চললে কিচ্ছু কাজ করবে না।** `server/` folder-এ `npm run dev` চালু আছে কিনা check করো। না থাকলে browser "Failed to reach backend server" দেখাবে।
 
-**Experiment 1 — see the proxy in action.**
-1. Open the Network tab in DevTools.
-2. Send a request to any URL.
-3. You'll see *two* network calls:
-   - One from your browser to `/api/requests/execute` (this is the one Vite proxies to your Express server).
-   - You'll NOT see the call to JSONPlaceholder — that one happens server-to-server, invisible to the browser.
+- **Browser → Vite → Express → target URL** — চারটা ধাপ আছে। যেকোনো একটা break হলে error দেখায়।
 
-**Experiment 2 — stop the backend and Send.**
-1. In your `server/` terminal, press Ctrl+C to stop the Express server.
-2. Click Send in the browser.
-3. You'll see the red "Failed to reach backend server" error.
-4. Restart with `npm run dev` and try again.
+- **Browser-এর Network tab-এ শুধু `/api/requests/execute` দেখবে।** Target URL-এর call দেখবে না — সেটা server-to-server, browser invisible।
 
-**Experiment 3 — break the URL on purpose.**
-1. Type `not-a-real-url` in the URL bar and Send.
-2. You'll get `400 Invalid URL`. This comes from `new URL(url)` throwing in the Express handler.
+- **Status >= 400 কে "error" বলে না এই app-এ।** 404 means "target বলেছে not found" — সেটাও একটা valid response। Error তখন যখন আমাদের নিজের server-ই reach করা যায়নি বা URL invalid ছিল।
 
-**Experiment 4 — slow target.**
-1. Send a request to `https://httpbin.org/delay/5` (waits 5 seconds before responding).
-2. Watch the spinner spin, the response come back showing ~5000 ms.
-3. Try `https://httpbin.org/delay/35` and you'll get the `408` timeout after 30 seconds.
+- **`partialize` যা save করে আর যা করে না:** Reload-এর পর tab-গুলো থাকে কিন্তু response থাকে না — কারণ response cache করার মানে নেই। আবার Send চাপলে fresh data আসবে।
 
 ---
 
-## 1.9 What you should walk away knowing
+## 1.14 নিজে test করো (DevTools খুলে)
 
-After reading this chapter and the actual code:
+**Test 1 — Proxy দেখো:**
+1. F12 চেপে Network tab খোলো।
+2. একটা request পাঠাও।
+3. দেখবে **শুধু** `/api/requests/execute` POST-টা দেখা যায়। JSONPlaceholder-এ যাওয়া আসল call invisible (server-to-server)।
 
-- [ ] Why a backend is needed (CORS).
-- [ ] What the Vite proxy does and why the browser code uses `/api/...`.
-- [ ] How `useRequestStore` works: state + actions, `set`/`get`, immutable updates.
-- [ ] How RequestBuilder and ResponseViewer share state through the store without talking to each other.
-- [ ] What happens inside the `sendRequest` function, step by step.
-- [ ] What the Express `/api/requests/execute` route does, and how AbortController gives us a timeout.
-- [ ] The difference between "the user's request failed" (404 from target) and "we couldn't even reach the target" (timeout / network error).
+**Test 2 — Backend বন্ধ করে দেখো:**
+1. Server terminal-এ Ctrl+C চেপে stop করো।
+2. Browser-এ Send click করো।
+3. লাল box-এ "Failed to reach backend server" আসবে।
+4. `npm run dev` দিয়ে আবার চালু করো।
 
-When you've reviewed the code and feel solid on all of these, ask me for **Chapter 2 — Adding params, headers, body, and auth**.
+**Test 3 — Invalid URL:**
+1. URL bar-এ `not-a-real-url` লেখো।
+2. Send করো।
+3. `400 Invalid URL` error আসবে — backend-এর `new URL(url)` throw করেছে।
+
+**Test 4 — Slow target:**
+1. URL: `https://httpbin.org/delay/5` (এটা ৫ second wait করে তারপর response দেয়)।
+2. Spinner ৫ second ঘুরবে।
+3. Response time ~5000ms দেখাবে।
+4. `https://httpbin.org/delay/35` চেষ্টা করো — 30 second পর timeout error আসবে।
+
+**Test 5 — Tabs:**
+1. Top-এ `+` button চাপো — নতুন tab আসবে।
+2. দুই tab-এ ভিন্ন URL দাও।
+3. দুটোতে Send করো।
+4. Tab change করলে দেখবে প্রতিটার নিজের response আছে।
 
 ---
 
-# Chapters 2–15 (coming when you're ready)
+## 1.15 এই chapter পড়ার পর তুমি জানবে
 
-Each will follow the same format as Chapter 1:
-1. What it does (user-facing)
-2. Why it's not trivial
-3. Data flow diagram
-4. Files involved
-5. File-by-file walkthrough with code
-6. Complete execution trace
-7. Gotchas
-8. Try-it-yourself experiments
-9. Checklist of what you should know
+- [ ] CORS কী এবং backend কেন লাগে।
+- [ ] Vite proxy কী করে।
+- [ ] Zustand store কিভাবে কাজ করে (state + actions, `set`/`get`)।
+- [ ] Persist middleware কিভাবে localStorage-এ save করে।
+- [ ] Tabs কিভাবে multi-state manage করে (একটা store-এ array of tabs)।
+- [ ] Controlled input pattern।
+- [ ] `async`/`await` কিভাবে network call wait করে।
+- [ ] AbortController কী এবং কেন timeout-এর জন্য use হয়।
+- [ ] "User-এর request fail হলো" আর "আমরা target-ই reach করতে পারলাম না" — দুটোর difference।
 
-Just say **"chapter 2"** (or whichever) when you're ready.
+সব tick হলে — code পড়ে confident হও — তারপর **"chapter 2"** বলো।
+
+---
+
+## পরবর্তী Chapters (যখন তুমি ready)
+
+| # | Feature | কী শিখবে |
+|---|---|---|
+| 2 | Collections (Save / Load) | Local-first persistence, modals |
+| 3 | Concurrent Benchmark (P50/P90/P99) | Worker pool pattern, percentile math, server-side cancellation |
+| 4 | Visual Flow Editor | Graph execution, topological sort, template chaining |
+| 5 | AI Assist (Groq) | LLM call, JSON mode prompts |
+| 6 | JWT Auth + Cloud Sync | bcrypt, JWT middleware, snapshot sync |
+
+শুধু **"chapter X"** বলো।

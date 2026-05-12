@@ -12,9 +12,7 @@ export interface TokenPayload {
 function jwtSecret(): string {
   const secret = process.env.JWT_SECRET
   if (!secret || secret.length < 16) {
-    throw new Error(
-      'JWT_SECRET is missing or too short (need >= 16 chars). Add it to server/.env.',
-    )
+    throw new Error('JWT_SECRET missing or too short (need >= 16 chars). Set it in server/.env.')
   }
   return secret
 }
@@ -34,7 +32,7 @@ export function signToken(payload: TokenPayload): string {
 export function verifyToken(token: string): TokenPayload | null {
   try {
     const decoded = jwt.verify(token, jwtSecret()) as jwt.JwtPayload
-    if (typeof decoded === 'object' && decoded.userId && decoded.email) {
+    if (decoded.userId && decoded.email) {
       return { userId: String(decoded.userId), email: String(decoded.email) }
     }
     return null
@@ -43,7 +41,6 @@ export function verifyToken(token: string): TokenPayload | null {
   }
 }
 
-// Express augmentation so req.user is typed
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
@@ -53,15 +50,13 @@ declare global {
   }
 }
 
-/** Require a valid JWT; otherwise returns 401. */
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const header = req.headers.authorization
-  if (!header || !header.startsWith('Bearer ')) {
+  if (!header?.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Authentication required' })
     return
   }
-  const token = header.slice(7).trim()
-  const payload = verifyToken(token)
+  const payload = verifyToken(header.slice(7).trim())
   if (!payload) {
     res.status(401).json({ error: 'Invalid or expired token' })
     return
@@ -70,8 +65,6 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   next()
 }
 
-// Basic email format check — not exhaustive, but good enough as a safety net.
 export function isValidEmail(email: string): boolean {
-  if (typeof email !== 'string' || email.length > 254) return false
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  return typeof email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }

@@ -1,94 +1,102 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Edge, Node } from '@xyflow/react'
-import type { FlowNodeData, NodeRuntime, NodeOutput, NodeState } from '../lib/flow/flowTypes'
+import type { HttpMethod } from './useRequestStore'
+
+export type FlowNodeKind = 'request' | 'delay'
+export type NodeState = 'idle' | 'running' | 'success' | 'error'
+
+export interface RequestNodeData extends Record<string, unknown> {
+  label: string
+  method: HttpMethod
+  url: string
+  body: string
+}
+
+export interface DelayNodeData extends Record<string, unknown> {
+  label: string
+  ms: number
+}
+
+export type FlowNodeData = RequestNodeData | DelayNodeData
+
+export interface NodeOutput {
+  status?: number
+  body?: unknown    // parsed JSON if possible
+  responseTime?: number
+  delayedMs?: number
+}
+
+export interface NodeRuntime {
+  state: NodeState
+  error: string | null
+  output: NodeOutput | null
+}
 
 export type FlowNode = Node<FlowNodeData>
 
-interface FlowStore {
+interface FlowState {
   nodes: FlowNode[]
   edges: Edge[]
-  // runtime is transient — keyed by node id
   runtime: Record<string, NodeRuntime>
   running: boolean
-  failedNodeId: string | null
 
   setNodes: (nodes: FlowNode[]) => void
   setEdges: (edges: Edge[]) => void
-
   addNode: (node: FlowNode) => void
   updateNodeData: (id: string, patch: Partial<FlowNodeData>) => void
   removeNode: (id: string) => void
 
   setRunning: (running: boolean) => void
-  setFailedNodeId: (id: string | null) => void
-  setNodeState: (id: string, state: NodeState) => void
+  setNodeState: (id: string, state: NodeState, error?: string) => void
   setNodeOutput: (id: string, output: NodeOutput) => void
-  setNodeError: (id: string, error: string) => void
   resetRuntime: () => void
 }
 
-const DEFAULT_RUNTIME: NodeRuntime = {
-  state: 'idle',
-  startedAt: null,
-  finishedAt: null,
-  error: null,
-  output: null,
-}
+const DEFAULT_RUNTIME: NodeRuntime = { state: 'idle', error: null, output: null }
 
-export const useFlowStore = create<FlowStore>()(
+export const useFlowStore = create<FlowState>()(
   persist(
     (set) => ({
       nodes: [],
       edges: [],
       runtime: {},
       running: false,
-      failedNodeId: null,
 
       setNodes: (nodes) => set({ nodes }),
       setEdges: (edges) => set({ edges }),
 
       addNode: (node) =>
-        set((state) => ({
-          nodes: [...state.nodes, node],
-          runtime: { ...state.runtime, [node.id]: { ...DEFAULT_RUNTIME } },
+        set((s) => ({
+          nodes: [...s.nodes, node],
+          runtime: { ...s.runtime, [node.id]: { ...DEFAULT_RUNTIME } },
         })),
 
       updateNodeData: (id, patch) =>
-        set((state) => ({
-          nodes: state.nodes.map((n) =>
+        set((s) => ({
+          nodes: s.nodes.map((n) =>
             n.id === id ? { ...n, data: { ...n.data, ...patch } as FlowNodeData } : n,
           ),
         })),
 
       removeNode: (id) =>
-        set((state) => {
-          const rest = { ...state.runtime }
-          delete rest[id]
+        set((s) => {
+          const runtime = { ...s.runtime }
+          delete runtime[id]
           return {
-            nodes: state.nodes.filter((n) => n.id !== id),
-            edges: state.edges.filter((e) => e.source !== id && e.target !== id),
-            runtime: rest,
+            nodes: s.nodes.filter((n) => n.id !== id),
+            edges: s.edges.filter((e) => e.source !== id && e.target !== id),
+            runtime,
           }
         }),
 
       setRunning: (running) => set({ running }),
-      setFailedNodeId: (id) => set({ failedNodeId: id }),
 
-      setNodeState: (id, state) =>
+      setNodeState: (id, state, error) =>
         set((s) => ({
           runtime: {
             ...s.runtime,
-            [id]: {
-              ...(s.runtime[id] ?? DEFAULT_RUNTIME),
-              state,
-              startedAt: state === 'running' ? Date.now() : s.runtime[id]?.startedAt ?? null,
-              finishedAt:
-                state === 'success' || state === 'error'
-                  ? Date.now()
-                  : s.runtime[id]?.finishedAt ?? null,
-              error: state === 'error' ? s.runtime[id]?.error ?? null : null,
-            },
+            [id]: { ...(s.runtime[id] ?? DEFAULT_RUNTIME), state, error: error ?? null },
           },
         })),
 
@@ -100,27 +108,16 @@ export const useFlowStore = create<FlowStore>()(
           },
         })),
 
-      setNodeError: (id, error) =>
-        set((s) => ({
-          runtime: {
-            ...s.runtime,
-            [id]: { ...(s.runtime[id] ?? DEFAULT_RUNTIME), error },
-          },
-        })),
-
       resetRuntime: () =>
         set((s) => {
           const cleared: Record<string, NodeRuntime> = {}
           for (const n of s.nodes) cleared[n.id] = { ...DEFAULT_RUNTIME }
-          return { runtime: cleared, failedNodeId: null }
+          return { runtime: cleared }
         }),
     }),
     {
       name: 'reqbench-flow',
-      partialize: (state) => ({
-        nodes: state.nodes,
-        edges: state.edges,
-      }),
+      partialize: (s) => ({ nodes: s.nodes, edges: s.edges }),
     },
   ),
 )

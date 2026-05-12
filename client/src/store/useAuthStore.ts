@@ -7,14 +7,14 @@ export interface AuthUser {
   name: string | null
 }
 
-interface AuthStore {
+interface AuthState {
   token: string | null
   user: AuthUser | null
   setSession: (token: string, user: AuthUser) => void
   clearSession: () => void
 }
 
-export const useAuthStore = create<AuthStore>()(
+export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       token: null,
@@ -25,8 +25,3 @@ export const useAuthStore = create<AuthStore>()(
     { name: 'reqbench-auth' },
   ),
 )
-
-/** Returns `true` if the user is currently signed in. */
-export function isSignedIn(): boolean {
-  return Boolean(useAuthStore.getState().token)
-}

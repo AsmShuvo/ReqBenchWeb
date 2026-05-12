@@ -1,80 +1,57 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { useRequestStore, type HttpMethod, type KeyValuePair } from '../store/useRequestStore'
-import { useEnvironmentStore } from '../store/useEnvironmentStore'
-import { resolveString, buildVariableMap, collectUnresolved } from '../lib/resolveVariables'
-import SaveRequestModal from './SaveRequestModal'
-import CodeGenModal from './CodeGenModal'
+import { useCollectionStore } from '../store/useCollectionStore'
 import BenchmarkModal from './BenchmarkModal'
-import ImportModal from './ImportModal'
 import AiModal from './AiModal'
 
 const methods: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
-
-const methodColors: Record<HttpMethod, string> = {
-  GET: 'text-green-400',
-  POST: 'text-yellow-400',
-  PUT: 'text-blue-400',
-  PATCH: 'text-purple-400',
-  DELETE: 'text-red-400',
+const methodColor: Record<HttpMethod, string> = {
+  GET: 'text-green-400', POST: 'text-yellow-400', PUT: 'text-blue-400',
+  PATCH: 'text-purple-400', DELETE: 'text-red-400',
 }
 
-type BuilderTab = 'Params' | 'Headers' | 'Body' | 'Auth'
+type Tab = 'Headers' | 'Body'
 
-function KeyValueEditor({
-  pairs,
-  onChange,
-}: {
+function KeyValueEditor({ pairs, onChange }: {
   pairs: KeyValuePair[]
-  onChange: (pairs: KeyValuePair[]) => void
+  onChange: (p: KeyValuePair[]) => void
 }) {
-  const updatePair = (index: number, field: keyof KeyValuePair, value: string | boolean) => {
-    const updated = pairs.map((p, i) => (i === index ? { ...p, [field]: value } : p))
-    onChange(updated)
-  }
-
-  const addPair = () => {
-    onChange([...pairs, { key: '', value: '', enabled: true }])
-  }
-
-  const removePair = (index: number) => {
-    if (pairs.length === 1) return
-    onChange(pairs.filter((_, i) => i !== index))
-  }
+  const update = (i: number, field: keyof KeyValuePair, value: string | boolean) =>
+    onChange(pairs.map((p, idx) => (idx === i ? { ...p, [field]: value } : p)))
 
   return (
     <div className="space-y-2">
-      {pairs.map((pair, i) => (
-        <div key={i} className="flex items-center gap-2">
+      {pairs.map((p, i) => (
+        <div key={i} className="flex gap-2 items-center">
           <input
             type="checkbox"
-            checked={pair.enabled}
-            onChange={(e) => updatePair(i, 'enabled', e.target.checked)}
-            className="accent-blue-500"
+            checked={p.enabled}
+            onChange={(e) => update(i, 'enabled', e.target.checked)}
           />
           <input
             type="text"
             placeholder="Key"
-            value={pair.key}
-            onChange={(e) => updatePair(i, 'key', e.target.value)}
-            className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white placeholder-gray-500 outline-none focus:border-blue-500"
+            value={p.key}
+            onChange={(e) => update(i, 'key', e.target.value)}
+            className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm"
           />
           <input
             type="text"
             placeholder="Value"
-            value={pair.value}
-            onChange={(e) => updatePair(i, 'value', e.target.value)}
-            className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm text-white placeholder-gray-500 outline-none focus:border-blue-500"
+            value={p.value}
+            onChange={(e) => update(i, 'value', e.target.value)}
+            className="flex-1 bg-gray-800 border border-gray-700 rounded px-2 py-1 text-sm"
           />
           <button
-            onClick={() => removePair(i)}
-            className="text-gray-500 hover:text-red-400 text-sm cursor-pointer"
+            onClick={() => onChange(pairs.filter((_, idx) => idx !== i))}
+            className="text-gray-500 hover:text-red-400 cursor-pointer"
           >
-            &times;
+            ×
           </button>
         </div>
       ))}
       <button
-        onClick={addPair}
+        onClick={() => onChange([...pairs, { key: '', value: '', enabled: true }])}
         className="text-xs text-gray-400 hover:text-white cursor-pointer"
       >
         + Add
@@ -83,215 +60,179 @@ function KeyValueEditor({
   )
 }
 
-export default function RequestBuilder() {
-  const { tabs, activeTabId, updateTab, sendRequest } = useRequestStore()
-  const { environments, activeEnvironmentId } = useEnvironmentStore()
-  const [activeBuilderTab, setActiveBuilderTab] = useState<BuilderTab>('Params')
-  const [saveModalOpen, setSaveModalOpen] = useState(false)
-  const [codeGenOpen, setCodeGenOpen] = useState(false)
-  const [benchmarkOpen, setBenchmarkOpen] = useState(false)
-  const [importOpen, setImportOpen] = useState(false)
-  const [nlOpen, setNlOpen] = useState(false)
-  const tab = tabs.find((t) => t.id === activeTabId)
+function SaveModal({ onClose }: { onClose: () => void }) {
+  const tabs = useRequestStore((s) => s.tabs)
+  const activeTabId = useRequestStore((s) => s.activeTabId)
+  const tab = tabs.find((t) => t.id === activeTabId)!
+  const { collections, createCollection, saveRequest } = useCollectionStore()
+  const [name, setName] = useState('')
+  const [collectionId, setCollectionId] = useState(collections[0]?.id ?? '')
+  const [newCollectionName, setNewCollectionName] = useState('')
 
-  const activeEnv = environments.find((e) => e.id === activeEnvironmentId)
-  const varMap = useMemo(
-    () => (activeEnv ? buildVariableMap(activeEnv.variables) : new Map<string, string>()),
-    [activeEnv],
+  const save = () => {
+    if (!name.trim()) return
+    let cid = collectionId
+    if (!cid && newCollectionName.trim()) {
+      createCollection(newCollectionName.trim())
+      const cs = useCollectionStore.getState().collections
+      cid = cs[cs.length - 1].id
+    }
+    if (!cid) return
+    saveRequest(cid, {
+      name: name.trim(),
+      method: tab.method,
+      url: tab.url,
+      headers: tab.headers,
+      body: tab.body,
+    })
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative bg-gray-900 border border-gray-700 rounded-lg w-full max-w-md p-5 space-y-3">
+        <h2 className="text-lg font-semibold">Save Request</h2>
+        <input
+          placeholder="Request name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
+        />
+        {collections.length > 0 ? (
+          <select
+            value={collectionId}
+            onChange={(e) => setCollectionId(e.target.value)}
+            className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
+          >
+            {collections.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        ) : (
+          <input
+            placeholder="New collection name"
+            value={newCollectionName}
+            onChange={(e) => setNewCollectionName(e.target.value)}
+            className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm"
+          />
+        )}
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="text-sm text-gray-400 hover:text-white px-3 py-2 border border-gray-700 rounded cursor-pointer">
+            Cancel
+          </button>
+          <button onClick={save} className="text-sm bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded cursor-pointer">
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
   )
+}
 
-  const hasVars = tab ? /\{\{\w+\}\}/.test(tab.url) : false
-  const resolvedUrl = tab ? resolveString(tab.url, varMap).resolved : ''
-  const unresolvedVars = useMemo(() => {
-    if (!tab) return []
-    return collectUnresolved(
-      [
-        tab.url,
-        ...tab.params.filter((p) => p.enabled && p.key).flatMap((p) => [p.key, p.value]),
-        ...tab.headers.filter((p) => p.enabled && p.key).flatMap((p) => [p.key, p.value]),
-        tab.body,
-        tab.authToken,
-      ],
-      varMap,
-    )
-  }, [tab, varMap])
+export default function RequestBuilder() {
+  const tabs = useRequestStore((s) => s.tabs)
+  const activeTabId = useRequestStore((s) => s.activeTabId)
+  const updateTab = useRequestStore((s) => s.updateTab)
+  const send = useRequestStore((s) => s.send)
+  const tab = tabs.find((t) => t.id === activeTabId)!
+
+  const [view, setView] = useState<Tab>('Headers')
+  const [saveOpen, setSaveOpen] = useState(false)
+  const [benchOpen, setBenchOpen] = useState(false)
+  const [nlOpen, setNlOpen] = useState(false)
 
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !tab.loading) {
         e.preventDefault()
-        if (tab && !tab.loading) {
-          sendRequest(tab.id)
-        }
+        void send(tab.id)
       }
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [tab, sendRequest])
-
-  if (!tab) return null
-
-  const builderTabs: BuilderTab[] = ['Params', 'Headers', 'Body', 'Auth']
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [send, tab.id, tab.loading])
 
   return (
     <div className="flex flex-col h-full">
-      {/* URL Bar */}
       <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-800">
         <select
           value={tab.method}
           onChange={(e) => updateTab(tab.id, { method: e.target.value as HttpMethod })}
-          className={`bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm font-semibold outline-none cursor-pointer ${methodColors[tab.method]}`}
+          className={`bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm font-semibold cursor-pointer ${methodColor[tab.method]}`}
         >
-          {methods.map((m) => (
-            <option key={m} value={m} className="text-white">
-              {m}
-            </option>
-          ))}
+          {methods.map((m) => <option key={m} value={m} className="text-white">{m}</option>)}
         </select>
         <input
           type="text"
           placeholder="Enter URL..."
-          aria-label="Request URL"
           value={tab.url}
           onChange={(e) => updateTab(tab.id, { url: e.target.value })}
-          className="flex-1 min-w-[160px] bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 outline-none focus:border-blue-500"
+          className="flex-1 min-w-[160px] bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm"
         />
         <button
           onClick={() => setNlOpen(true)}
-          className="text-purple-300 hover:text-purple-200 text-sm px-3 py-1.5 rounded cursor-pointer border border-purple-500/40 hover:border-purple-500/60"
-          title="Generate request from natural language"
+          className="text-purple-300 hover:text-purple-200 text-sm px-3 py-1.5 rounded border border-purple-500/40 cursor-pointer"
+          title="Natural language → request"
         >
           ✨ NL
         </button>
         <button
-          onClick={() => setImportOpen(true)}
-          className="text-gray-400 hover:text-white hover:bg-gray-800 text-sm px-3 py-1.5 rounded cursor-pointer border border-gray-700"
-          title="Import (cURL, Postman, OpenAPI)"
-        >
-          Import
-        </button>
-        <button
-          onClick={() => setCodeGenOpen(true)}
-          className="text-gray-400 hover:text-white hover:bg-gray-800 text-sm px-3 py-1.5 rounded cursor-pointer border border-gray-700"
-          title="Generate Code"
-        >
-          &lt;/&gt;
-        </button>
-        <button
-          onClick={() => setBenchmarkOpen(true)}
-          className="text-gray-400 hover:text-white hover:bg-gray-800 text-sm px-3 py-1.5 rounded cursor-pointer border border-gray-700"
-          title="Benchmark"
+          onClick={() => setBenchOpen(true)}
+          className="text-sm text-gray-400 hover:text-white px-3 py-1.5 rounded border border-gray-700 cursor-pointer"
         >
           Bench
         </button>
         <button
-          onClick={() => setSaveModalOpen(true)}
-          className="text-gray-400 hover:text-white hover:bg-gray-800 text-sm px-3 py-1.5 rounded cursor-pointer border border-gray-700"
+          onClick={() => setSaveOpen(true)}
+          className="text-sm text-gray-400 hover:text-white px-3 py-1.5 rounded border border-gray-700 cursor-pointer"
         >
           Save
         </button>
         <button
-          onClick={() => sendRequest(tab.id)}
+          onClick={() => void send(tab.id)}
           disabled={tab.loading}
-          className="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-1.5 rounded cursor-pointer min-w-16"
+          className="bg-blue-600 hover:bg-blue-500 disabled:bg-blue-600/50 text-white text-sm font-medium px-5 py-1.5 rounded cursor-pointer min-w-16"
         >
           {tab.loading ? (
             <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-          ) : (
-            'Send'
-          )}
+          ) : 'Send'}
         </button>
       </div>
 
-      {/* Resolved URL preview + unresolved warnings */}
-      {hasVars && tab.url.trim() && (
-        <div className="px-3 py-1.5 border-b border-gray-800 space-y-1">
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-gray-500 shrink-0">Resolved:</span>
-            <span className="text-gray-400 font-mono truncate">{resolvedUrl}</span>
-          </div>
-          {unresolvedVars.length > 0 && (
-            <div className="flex items-center gap-1.5 text-xs text-yellow-400">
-              <span>&#9888;</span>
-              <span>
-                Unresolved: {unresolvedVars.map((v) => `{{${v}}}`).join(', ')}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Builder Tabs */}
       <div className="flex border-b border-gray-800">
-        {builderTabs.map((bt) => (
+        {(['Headers', 'Body'] as Tab[]).map((t) => (
           <button
-            key={bt}
-            onClick={() => setActiveBuilderTab(bt)}
+            key={t}
+            onClick={() => setView(t)}
             className={`px-4 py-2 text-sm cursor-pointer ${
-              activeBuilderTab === bt
-                ? 'text-white border-b-2 border-blue-500'
-                : 'text-gray-400 hover:text-gray-200'
+              view === t ? 'text-white border-b-2 border-blue-500' : 'text-gray-400 hover:text-gray-200'
             }`}
           >
-            {bt}
+            {t}
           </button>
         ))}
       </div>
 
-      {/* Tab Content */}
       <div className="flex-1 overflow-auto p-3">
-        {activeBuilderTab === 'Params' && (
-          <KeyValueEditor
-            pairs={tab.params}
-            onChange={(params) => updateTab(tab.id, { params })}
-          />
-        )}
-
-        {activeBuilderTab === 'Headers' && (
+        {view === 'Headers' && (
           <KeyValueEditor
             pairs={tab.headers}
             onChange={(headers) => updateTab(tab.id, { headers })}
           />
         )}
-
-        {activeBuilderTab === 'Body' && (
+        {view === 'Body' && (
           <textarea
             value={tab.body}
             onChange={(e) => updateTab(tab.id, { body: e.target.value })}
             placeholder='{ "key": "value" }'
-            className="w-full h-full bg-gray-800 border border-gray-700 rounded p-3 text-sm text-white placeholder-gray-500 outline-none focus:border-blue-500 resize-none font-mono"
+            className="w-full h-full bg-gray-800 border border-gray-700 rounded p-3 text-sm font-mono resize-none"
           />
         )}
-
-        {activeBuilderTab === 'Auth' && (
-          <div className="space-y-3">
-            <select
-              value={tab.authType}
-              onChange={(e) =>
-                updateTab(tab.id, { authType: e.target.value as 'none' | 'bearer' | 'basic' })
-              }
-              className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-sm text-white outline-none cursor-pointer"
-            >
-              <option value="none">No Auth</option>
-              <option value="bearer">Bearer Token</option>
-              <option value="basic">Basic Auth</option>
-            </select>
-            {tab.authType !== 'none' && (
-              <input
-                type="text"
-                placeholder={tab.authType === 'bearer' ? 'Token' : 'username:password'}
-                value={tab.authToken}
-                onChange={(e) => updateTab(tab.id, { authToken: e.target.value })}
-                className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 outline-none focus:border-blue-500"
-              />
-            )}
-          </div>
-        )}
       </div>
-      {saveModalOpen && <SaveRequestModal onClose={() => setSaveModalOpen(false)} />}
-      {codeGenOpen && <CodeGenModal onClose={() => setCodeGenOpen(false)} />}
-      {benchmarkOpen && <BenchmarkModal onClose={() => setBenchmarkOpen(false)} />}
-      {importOpen && <ImportModal onClose={() => setImportOpen(false)} />}
+
+      {saveOpen && <SaveModal onClose={() => setSaveOpen(false)} />}
+      {benchOpen && <BenchmarkModal onClose={() => setBenchOpen(false)} />}
       {nlOpen && <AiModal mode="nl" onClose={() => setNlOpen(false)} />}
     </div>
   )

@@ -1,12 +1,14 @@
+// Runs a graph of nodes: topo-sort the DAG, run each node in order, pipe outputs
+// into later nodes via {{label.body.field}} templates.
+
 import type { Edge } from '@xyflow/react'
 import type {
-  FlowNodeData, NodeOutput, RequestNodeData, DelayNodeData, ConditionNodeData,
+  FlowNodeData, NodeOutput, RequestNodeData, DelayNodeData,
 } from './flowTypes'
-import { resolveTemplate } from './templateResolver'
 
 export interface FlowNode {
   id: string
-  type: 'request' | 'delay' | 'condition'
+  type: 'request' | 'delay'
   data: FlowNodeData
 }
 
@@ -16,9 +18,44 @@ export interface ExecutionCallbacks {
   onNodeError: (nodeId: string, error: string) => void
 }
 
+// ─── Template substitution ─────────────────────────────────────────────────
+// Syntax: {{nodeLabel.body.path.to.value}}
+// "nodeLabel" looks up a previous node's output by its label,
+// then the dotted path walks into the JSON.
+
+const TEMPLATE_RE = /\{\{([^{}]+?)\}\}/g
+
+function walkPath(root: unknown, path: string[]): unknown {
+  let cur: unknown = root
+  for (const segment of path) {
+    if (cur === null || cur === undefined || typeof cur !== 'object') return undefined
+    cur = (cur as Record<string, unknown>)[segment]
+  }
+  return cur
+}
+
+function resolveTemplate(input: string, outputs: Map<string, NodeOutput>): {
+  resolved: string
+  unresolved: string[]
+} {
+  const unresolved: string[] = []
+  const resolved = input.replace(TEMPLATE_RE, (match, expr: string) => {
+    const [label, ...path] = expr.trim().split('.')
+    const out = outputs.get(label)
+    if (!out) { unresolved.push(expr); return match }
+    const val = walkPath(out, path)
+    if (val === undefined) { unresolved.push(expr); return match }
+    if (val === null) return 'null'
+    if (typeof val === 'string') return val
+    if (typeof val === 'number' || typeof val === 'boolean') return String(val)
+    return JSON.stringify(val)
+  })
+  return { resolved, unresolved }
+}
+
 // ─── Topological sort ──────────────────────────────────────────────────────
 
-export function topoSort(nodes: FlowNode[], edges: Edge[]): FlowNode[] {
+function topoSort(nodes: FlowNode[], edges: Edge[]): FlowNode[] {
   const inDegree = new Map<string, number>()
   const adj = new Map<string, string[]>()
   const byId = new Map<string, FlowNode>()
@@ -34,55 +71,33 @@ export function topoSort(nodes: FlowNode[], edges: Edge[]): FlowNode[] {
   }
 
   const queue: string[] = []
-  for (const [id, deg] of inDegree) if (deg === 0) queue.push(id)
+  inDegree.forEach((deg, id) => { if (deg === 0) queue.push(id) })
 
-  const result: FlowNode[] = []
+  const sorted: FlowNode[] = []
   while (queue.length > 0) {
     const id = queue.shift()!
-    const node = byId.get(id)
-    if (node) result.push(node)
+    sorted.push(byId.get(id)!)
     for (const next of adj.get(id) || []) {
       const d = (inDegree.get(next) || 0) - 1
       inDegree.set(next, d)
       if (d === 0) queue.push(next)
     }
   }
-  return result
+  return sorted
 }
 
-// ─── Per-node execution ────────────────────────────────────────────────────
-
-function parseHeaders(raw: string): Record<string, string> {
-  const headers: Record<string, string> = {}
-  for (const line of raw.split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed) continue
-    const colon = trimmed.indexOf(':')
-    if (colon === -1) continue
-    const key = trimmed.slice(0, colon).trim()
-    const value = trimmed.slice(colon + 1).trim()
-    if (key) headers[key] = value
-  }
-  return headers
-}
+// ─── Node executors ────────────────────────────────────────────────────────
 
 async function executeRequest(
   data: RequestNodeData,
   outputs: Map<string, NodeOutput>,
 ): Promise<NodeOutput> {
-  const urlRes = resolveTemplate(data.url, outputs)
-  const headersRes = resolveTemplate(data.headers, outputs)
-  const bodyRes = resolveTemplate(data.body, outputs)
+  const url = resolveTemplate(data.url, outputs)
+  const body = resolveTemplate(data.body, outputs)
 
-  const allUnresolved = [
-    ...urlRes.unresolved,
-    ...headersRes.unresolved,
-    ...bodyRes.unresolved,
-  ]
-  if (allUnresolved.length > 0) {
-    throw new Error(
-      `Unresolved template references: ${allUnresolved.map((u) => `{{${u}}}`).join(', ')}`,
-    )
+  const unresolved = [...url.unresolved, ...body.unresolved]
+  if (unresolved.length > 0) {
+    throw new Error(`Unresolved template references: ${unresolved.map((u) => `{{${u}}}`).join(', ')}`)
   }
 
   const res = await fetch('/api/requests/execute', {
@@ -90,52 +105,29 @@ async function executeRequest(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       method: data.method,
-      url: urlRes.resolved,
-      headers: parseHeaders(headersRes.resolved),
-      body:
-        data.method !== 'GET' && data.method !== 'DELETE' && bodyRes.resolved
-          ? bodyRes.resolved
-          : undefined,
+      url: url.resolved,
+      headers: {},
+      body: data.method !== 'GET' && data.method !== 'DELETE' && body.resolved ? body.resolved : undefined,
     }),
   })
-
   const json = await res.json()
   if (json.error) throw new Error(json.error)
 
-  // Parse JSON body when possible
+  // Parse JSON body when possible — that's what enables {{label.body.field}}
   let parsedBody: unknown = json.body
-  try {
-    parsedBody = JSON.parse(json.body)
-  } catch {
-    // leave as string
-  }
+  try { parsedBody = JSON.parse(json.body) } catch { /* leave as string */ }
 
-  const output: NodeOutput = {
-    status: json.status,
-    statusText: json.statusText,
-    headers: json.headers,
-    body: parsedBody,
-    bodyText: json.body,
-    responseTime: json.responseTime,
-  }
-
-  // Stop flow on HTTP error statuses so chaining failures are visible
   if (typeof json.status === 'number' && json.status >= 400) {
     throw new Error(`Request failed: ${json.status} ${json.statusText}`)
   }
 
-  return output
+  return { status: json.status, body: parsedBody, responseTime: json.responseTime }
 }
 
 async function executeDelay(data: DelayNodeData): Promise<NodeOutput> {
   const ms = Math.max(0, Math.min(data.ms, 60000))
   await new Promise((r) => setTimeout(r, ms))
   return { delayedMs: ms }
-}
-
-function executeCondition(data: ConditionNodeData): NodeOutput {
-  // Placeholder: does not branch in V1, just records the expression as a note.
-  return { note: `Condition placeholder: "${data.expression || '(empty)'}" — not evaluated in V1` }
 }
 
 // ─── Main runner ───────────────────────────────────────────────────────────
@@ -147,7 +139,7 @@ export async function runFlow(
 ): Promise<void> {
   const ordered = topoSort(nodes, edges)
   if (ordered.length < nodes.length) {
-    throw new Error('Flow contains a cycle. Remove the cycle before running.')
+    throw new Error('Flow contains a cycle.')
   }
 
   const outputs = new Map<string, NodeOutput>()
@@ -155,20 +147,16 @@ export async function runFlow(
   for (const node of ordered) {
     callbacks.onNodeStart(node.id)
     try {
-      let output: NodeOutput
-      if (node.type === 'request') {
-        output = await executeRequest(node.data as RequestNodeData, outputs)
-      } else if (node.type === 'delay') {
-        output = await executeDelay(node.data as DelayNodeData)
-      } else {
-        output = executeCondition(node.data as ConditionNodeData)
-      }
+      const output =
+        node.type === 'request'
+          ? await executeRequest(node.data as RequestNodeData, outputs)
+          : await executeDelay(node.data as DelayNodeData)
       outputs.set(node.data.label, output)
       callbacks.onNodeSuccess(node.id, output)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
       callbacks.onNodeError(node.id, message)
-      throw err // Stop the flow
+      throw err
     }
   }
 }

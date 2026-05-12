@@ -1,19 +1,17 @@
 import { useRequestStore } from '../store/useRequestStore'
 
-const methodColors: Record<string, string> = {
-  GET: 'text-green-400',
-  POST: 'text-yellow-400',
-  PUT: 'text-blue-400',
-  PATCH: 'text-purple-400',
-  DELETE: 'text-red-400',
+const methodColor: Record<string, string> = {
+  GET: 'text-green-400', POST: 'text-yellow-400', PUT: 'text-blue-400',
+  PATCH: 'text-purple-400', DELETE: 'text-red-400',
 }
 
 export default function TabBar() {
-  const { tabs, activeTabId, setActiveTab, addTab, removeTab, duplicateTab } =
-    useRequestStore()
+  // bring data from store
+  const { tabs, activeTabId, setActiveTab, addTab, removeTab } = useRequestStore()
 
   return (
-    <div className="h-10 bg-gray-900 border-b border-gray-800 flex items-center gap-0 overflow-x-auto shrink-0">
+    <div className="h-10 bg-gray-900 border-b border-gray-800 flex items-center overflow-x-auto shrink-0">
+      {/* show all open tabs */}
       {tabs.map((tab) => (
         <div
           key={tab.id}
@@ -24,34 +22,20 @@ export default function TabBar() {
               : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'
           }`}
         >
-          <span className={`text-xs font-semibold ${methodColors[tab.method] ?? 'text-gray-400'}`}>
+          <span className={`text-xs font-semibold ${methodColor[tab.method] ?? 'text-gray-400'}`}>
             {tab.method}
           </span>
+          
           <span className="truncate max-w-36">{tab.name}</span>
-          <div className="flex items-center gap-0.5 ml-1">
+          {tabs.length > 1 && (
             <span
-              onClick={(e) => {
-                e.stopPropagation()
-                duplicateTab(tab.id)
-              }}
-              className="text-gray-600 hover:text-blue-400 opacity-0 group-hover:opacity-100 text-xs px-0.5"
-              title="Duplicate tab"
+              onClick={(e) => { e.stopPropagation(); removeTab(tab.id) }}
+              className="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 text-sm ml-1 cursor-pointer"
+              title="Close tab"
             >
-              ⧉
+              ×
             </span>
-            {tabs.length > 1 && (
-              <span
-                onClick={(e) => {
-                  e.stopPropagation()
-                  removeTab(tab.id)
-                }}
-                className="text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 text-sm px-0.5"
-                title="Close tab"
-              >
-                &times;
-              </span>
-            )}
-          </div>
+          )}
         </div>
       ))}
       <button

@@ -1,3 +1,6 @@
+// Concurrent HTTP benchmark runner.
+// Spins up N parallel workers that share a counter; computes P50/P90/P99.
+
 export interface BenchmarkConfig {
   method: string
   url: string
@@ -5,8 +8,6 @@ export interface BenchmarkConfig {
   body?: string
   totalRequests: number
   concurrency: number
-  warmupCount: number
-  delayMs: number
   timeoutMs: number
   runSignal?: AbortSignal
 }
@@ -15,23 +16,17 @@ export interface RequestResult {
   index: number
   status: number | null
   responseTime: number
-  error: string | null
-  timestamp: number
 }
 
 export interface BenchmarkResults {
   totalRequests: number
   successCount: number
   failureCount: number
-  errorRate: number
   totalDuration: number
   requestsPerSecond: number
-  minResponseTime: number
-  maxResponseTime: number
   avgResponseTime: number
-  medianResponseTime: number
+  p50: number
   p90: number
-  p95: number
   p99: number
   statusCodeBreakdown: Record<string, number>
   timeSeries: { index: number; responseTime: number; status: number | null }[]
@@ -43,91 +38,54 @@ function percentile(sorted: number[], p: number): number {
   return sorted[Math.max(0, idx)]
 }
 
-async function executeOne(
-  config: BenchmarkConfig,
-  index: number,
-): Promise<RequestResult> {
+async function executeOne(config: BenchmarkConfig, index: number): Promise<RequestResult> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs)
-  const timestamp = Date.now()
+  const start = performance.now()
 
   try {
-    const fetchOptions: RequestInit = {
+    const res = await fetch(config.url, {
       method: config.method,
       headers: config.headers,
+      body: config.body && config.method !== 'GET' && config.method !== 'HEAD' ? config.body : undefined,
       signal: controller.signal,
-    }
-
-    if (config.body && config.method !== 'GET' && config.method !== 'HEAD') {
-      fetchOptions.body = config.body
-    }
-
-    const start = performance.now()
-    const response = await fetch(config.url, fetchOptions)
-    // Consume body to measure full response time
-    await response.text()
-    const responseTime = Math.round(performance.now() - start)
-
-    return { index, status: response.status, responseTime, error: null, timestamp }
-  } catch (err: unknown) {
-    const responseTime = Math.round(performance.now() - timestamp)
-    if (err instanceof Error && err.name === 'AbortError') {
-      return { index, status: null, responseTime, error: 'timeout', timestamp }
-    }
-    const message = err instanceof Error ? err.message : 'Unknown error'
-    return { index, status: null, responseTime, error: message, timestamp }
+    })
+    await res.text() // consume body so timing reflects full response
+    return { index, status: res.status, responseTime: Math.round(performance.now() - start) }
+  } catch {
+    return { index, status: null, responseTime: Math.round(performance.now() - start) }
   } finally {
     clearTimeout(timeout)
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
 export async function runBenchmark(config: BenchmarkConfig): Promise<BenchmarkResults> {
-  // Warmup phase (results discarded)
-  for (let i = 0; i < config.warmupCount; i++) {
-    if (config.runSignal?.aborted) break
-    await executeOne(config, -1)
-    if (config.delayMs > 0) await sleep(config.delayMs)
-  }
-
   const results: RequestResult[] = []
   let nextIndex = 0
   const total = config.totalRequests
   const benchmarkStart = performance.now()
 
-  // Worker pool: N concurrent workers pull from a shared counter
+  // Worker pool: each worker pulls from a shared counter until exhausted
   async function worker() {
     while (true) {
       if (config.runSignal?.aborted) break
       const idx = nextIndex++
       if (idx >= total) break
-
-      const result = await executeOne(config, idx)
-      results.push(result)
-
-      if (config.delayMs > 0) await sleep(config.delayMs)
+      results.push(await executeOne(config, idx))
     }
   }
 
-  const workers = Array.from(
-    { length: Math.min(config.concurrency, total) },
-    () => worker(),
+  await Promise.all(
+    Array.from({ length: Math.min(config.concurrency, total) }, () => worker()),
   )
-  await Promise.all(workers)
 
   const totalDuration = Math.round(performance.now() - benchmarkStart)
-
-  // Compute stats
-  const successResults = results.filter((r) => r.status !== null && r.status < 500)
-  const failureCount = results.length - successResults.length
   const times = results.map((r) => r.responseTime).sort((a, b) => a - b)
+  const successCount = results.filter((r) => r.status !== null && r.status < 500).length
 
   const statusBreakdown: Record<string, number> = {}
   for (const r of results) {
-    const key = r.status !== null ? String(r.status) : 'error'
+    const key = r.status === null ? 'error' : String(r.status)
     statusBreakdown[key] = (statusBreakdown[key] || 0) + 1
   }
 
@@ -135,17 +93,13 @@ export async function runBenchmark(config: BenchmarkConfig): Promise<BenchmarkRe
 
   return {
     totalRequests: results.length,
-    successCount: successResults.length,
-    failureCount,
-    errorRate: results.length > 0 ? Number(((failureCount / results.length) * 100).toFixed(2)) : 0,
+    successCount,
+    failureCount: results.length - successCount,
     totalDuration,
     requestsPerSecond: totalDuration > 0 ? Number(((results.length / totalDuration) * 1000).toFixed(2)) : 0,
-    minResponseTime: times[0] ?? 0,
-    maxResponseTime: times[times.length - 1] ?? 0,
     avgResponseTime: times.length > 0 ? Math.round(sum / times.length) : 0,
-    medianResponseTime: percentile(times, 50),
+    p50: percentile(times, 50),
     p90: percentile(times, 90),
-    p95: percentile(times, 95),
     p99: percentile(times, 99),
     statusCodeBreakdown: statusBreakdown,
     timeSeries: results
