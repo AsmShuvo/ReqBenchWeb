@@ -59,7 +59,7 @@ export default function BenchmarkModal({ onClose }: { onClose: () => void }) {
     for (const p of tab.headers) if (p.enabled && p.key) out[p.key] = p.value
     return out
   }
-
+  // run benchmark by calling backend api 
   const run = async () => {
     setRunning(true); setResults(null); setError(null)
     const runId = crypto.randomUUID()
@@ -88,7 +88,7 @@ export default function BenchmarkModal({ onClose }: { onClose: () => void }) {
       runIdRef.current = null
     }
   }
-
+// if active runid send cancel signal to backend to stop benchmark
   const cancel = async () => {
     if (!runIdRef.current) return
     await fetch('/api/benchmarks/cancel', {

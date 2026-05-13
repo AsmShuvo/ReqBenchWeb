@@ -31,10 +31,12 @@ app.post('/api/requests/execute', async (req, res) => {
     return
   }
   try { new URL(url) } catch {
+    // url validation
     res.status(400).json({ error: 'Invalid URL' })
     return
   }
 
+  // 30sec timeout for the req 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 30000)
 
@@ -46,13 +48,14 @@ app.post('/api/requests/execute', async (req, res) => {
       body: body && method !== 'GET' && method !== 'HEAD' ? body : undefined,
       signal: controller.signal,
     })
+    // calc res time
     const responseTime = Math.round(performance.now() - start)
 
     const responseHeaders: Record<string, string> = {}
     response.headers.forEach((value, key) => { responseHeaders[key] = value })
 
     const responseBody = await response.text()
-
+    // convert to json
     res.json({
       status: response.status,
       statusText: response.statusText,

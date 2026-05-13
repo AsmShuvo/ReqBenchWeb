@@ -144,6 +144,7 @@ export default function RequestBuilder() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // send req with ctrl+enter
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !tab.loading) {
         e.preventDefault()
         void send(tab.id)

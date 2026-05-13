@@ -121,7 +121,7 @@ export const useRequestStore = create<RequestState>()(
       },
 
       send: async (id) => {
-        // cur tab khujo
+        // find cur tab
         const tab = get().tabs.find((t) => t.id === id)
         if (!tab || !tab.url.trim()) return
 
@@ -155,7 +155,7 @@ export const useRequestStore = create<RequestState>()(
               headers: data.headers,
               body: data.body,
               responseTime: data.responseTime,
-              size: new Blob([data.body]).size, // Binary Large Object
+              size: new Blob([data.body]).size, // Binary Large Object: size of data
             },
           })
         } catch {

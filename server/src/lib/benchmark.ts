@@ -65,7 +65,7 @@ export async function runBenchmark(config: BenchmarkConfig): Promise<BenchmarkRe
   const total = config.totalRequests
   const benchmarkStart = performance.now()
 
-  // Worker pool: each worker pulls from a shared counter until exhausted
+  // Worker pool: each worker takes one task at a time and call executeOne until we've issued all requests or been signaled to stop.
   async function worker() {
     while (true) {
       if (config.runSignal?.aborted) break
@@ -74,15 +74,17 @@ export async function runBenchmark(config: BenchmarkConfig): Promise<BenchmarkRe
       results.push(await executeOne(config, idx))
     }
   }
-
+ // create N promises for the workers and wait for all to complete
   await Promise.all(
     Array.from({ length: Math.min(config.concurrency, total) }, () => worker()),
   )
 
   const totalDuration = Math.round(performance.now() - benchmarkStart)
+  // sorted array to compute percentiles 
   const times = results.map((r) => r.responseTime).sort((a, b) => a - b)
   const successCount = results.filter((r) => r.status !== null && r.status < 500).length
 
+  // breakdown of status codes for showing histogram and error counts
   const statusBreakdown: Record<string, number> = {}
   for (const r of results) {
     const key = r.status === null ? 'error' : String(r.status)

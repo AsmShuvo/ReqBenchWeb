@@ -15,7 +15,7 @@ A browser-based Postman-style HTTP client with **zero install**, **local-first c
 - **Local-first collections** — save requests and load them back in one click; everything lives in `localStorage` by default
 - **Concurrent benchmarking** — run N parallel requests, see P50/P90/P99 latency and a live response-time chart
 - **Visual flow editor** — chain Request and Delay nodes; pipe outputs into later nodes with `{{nodeLabel.body.field}}` templates
-- **AI assist (Groq)** — Fix a failing request, Explain a response, Generate a request from natural language
+- **AI assist (Groq)** — Generate a request from natural language
 - **Optional auth + cloud sync** — sign up with email/password, JWT in localStorage, collections sync to Neon Postgres
 
 ---
