@@ -21,7 +21,7 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
 
-// ─── HTTP proxy: execute a single request on behalf of the browser ─────────
+// ─── HTTP proxy─────────
 
 app.post('/api/requests/execute', async (req, res) => {
   const { method, url, headers, body } = req.body
@@ -55,7 +55,6 @@ app.post('/api/requests/execute', async (req, res) => {
     response.headers.forEach((value, key) => { responseHeaders[key] = value })
 
     const responseBody = await response.text()
-    // convert to json
     res.json({
       status: response.status,
       statusText: response.statusText,
@@ -124,7 +123,7 @@ app.post('/api/benchmarks/cancel', (req, res) => {
   res.json({ cancelled: true })
 })
 
-// ─── AI (Groq) ─────────────────────────────────────────────────────────────
+// ─── groq ─────────────────────────────────────────────────────────────
 
 app.get('/api/ai/status', (_req, res) => {
   res.json({ configured: groqConfigured() })
@@ -135,7 +134,6 @@ function truncate(s: unknown, n = 1500): string {
   return str.length > n ? str.slice(0, n) + '\n...[truncated]' : str
 }
 
-// "Fix this failing request"
 app.post('/api/ai/fix-request', async (req, res) => {
   const { method, url, headers, body, status, statusText } = req.body ?? {}
   if (!url) {
@@ -172,7 +170,6 @@ app.post('/api/ai/fix-request', async (req, res) => {
   }
 })
 
-// "Explain this response"
 app.post('/api/ai/explain-response', async (req, res) => {
   const { request, response } = req.body ?? {}
   if (!response) {
@@ -207,7 +204,6 @@ app.post('/api/ai/explain-response', async (req, res) => {
   }
 })
 
-// "Natural language to HTTP request"
 app.post('/api/ai/nl-to-request', async (req, res) => {
   const { prompt } = req.body ?? {}
   if (!prompt?.trim()) {
@@ -302,7 +298,7 @@ app.get('/api/auth/me', requireAuth, async (req, res) => {
   res.json({ user })
 })
 
-// ─── Cloud sync (authenticated) ────────────────────────────────────────────
+// ─── Cloud sync ────────────────────────────────────────────
 
 app.get('/api/sync/state', requireAuth, async (req, res) => {
   try {
